@@ -7,7 +7,7 @@ from utils.data_loader import DataSet
 from test_DKL import test_DKL
 import pickle
 
-models_folders = 'final_model_GP_test_on_corrected_labels_copy'
+models_folders = 'path/to/saved/models'
 high_quality_labels = True
 all_test_folders_path = os.path.join(os.getcwd(),models_folders)
 

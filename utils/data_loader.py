@@ -35,10 +35,10 @@ class DataSet(Dataset):
         self.seg_path1 = os.path.join(self.datapath, 'seg_01')
         self.seg_path2 = os.path.join(self.datapath, 'seg_02')
         self.seg_path3 = os.path.join(self.datapath, 'seg_03')
-        self.seg_path_GT = os.path.join(self.datapath, 'generated_majority_vote_and_vs')
+        self.seg_path_GT = os.path.join(self.datapath, 'seg_HQ')
         self.observation_labels = [self.seg_path1, self.seg_path2, self.seg_path3]
         self.observation_labels_4 = [self.seg_path1, self.seg_path2, self.seg_path3, self.seg_path_GT]
-        self.seg_path_voted = os.path.join(self.datapath, 'generated_majority_vote')
+        self.seg_path_voted = os.path.join(self.datapath, 'seg_majority_vote')
 
         # path of simulated labels
         if self.simulated_model:
@@ -287,27 +287,12 @@ class DataSet(Dataset):
         if self.labels_inference == 'voted_only':
             mask_name_vote = os.path.join(self.seg_path_voted,'label_'+self.img_list[idx][2:33])
             itk_mask_vote = sitk.ReadImage(mask_name_vote)
-            mask_vote = np.transpose(sitk.GetArrayFromImage(itk_mask_vote),(2,1,0))[int(re.findall(r'\d+', self.img_list[idx])[1])]
-
+            mask_vote = sitk.GetArrayFromImage(itk_mask_vote)[int(re.findall(r'\d+', self.img_list[idx])[1])]
 
         elif self.labels_inference == 'high_quality':
-            try:
-                # for the generated and saved .nii.gz file, need to transpose
-                mask_name_vote = os.path.join(self.seg_path_GT,'label_'+self.img_list[idx][2:33])
-                itk_mask_vote = sitk.ReadImage(mask_name_vote)
-                mask_vote = np.transpose(sitk.GetArrayFromImage(itk_mask_vote),(2,1,0))[int(re.findall(r'\d+', self.img_list[idx])[1])]
-
-            except:
-                try:
-                    mask_name_vote = os.path.join(self.seg_path_GT,'label_'+self.img_list[idx][2:26]+'_VS.nii.gz')
-                    itk_mask_vote = sitk.ReadImage(mask_name_vote)
-                    mask_vote = sitk.GetArrayFromImage(itk_mask_vote)[int(re.findall(r'\d+', self.img_list[idx])[1])]
-                    mask_vote = np.uint8(mask_vote)
-                except:
-                    mask_name_vote = os.path.join(self.seg_path_GT,'label_'+self.img_list[idx][2:26]+'_vs.nii.gz')
-                    itk_mask_vote = sitk.ReadImage(mask_name_vote)
-                    mask_vote = sitk.GetArrayFromImage(itk_mask_vote)[int(re.findall(r'\d+', self.img_list[idx])[1])]
-                    mask_vote = np.uint8(mask_vote)
+            mask_name_vote = os.path.join(self.seg_path_GT,'label_'+self.img_list[idx][2:33])
+            itk_mask_vote = sitk.ReadImage(mask_name_vote)
+            mask_vote = sitk.GetArrayFromImage(itk_mask_vote)[int(re.findall(r'\d+', self.img_list[idx])[1])]
 
 
         if self.labels == 'all':

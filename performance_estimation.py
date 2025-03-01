@@ -11,7 +11,7 @@ from utils.test_DKL_grid_sample import test_DKL_grid_sample
 import pickle
 
 high_quality_labels = True
-folder = 'NoPreLoad_TrainUnet_OptimizeHyper_Add3Sigmas3Mus_NoAddNoisePred_NoFeatBN_Sum2MuReg_random3__voted_only__dice_BCE__VariationalELBO__RBF__InducingPts_uniform500__FeatDim64__bst_8__bsv_8__fr_5'
+folder = 'model/name/for/performance/query'
 models_folders = 'grid_sample_performance/'
 folder_path = os.path.join(os.getcwd(),models_folders,folder)
 
@@ -77,10 +77,12 @@ test_loader = torch.utils.data.DataLoader(test_set, batch_size=int(args.batch_si
 # mu_all = torch.linspace(-5, 5, 41) #21
 # sigma_all = torch.linspace(0.1, 1.2, 11) #19
 # mu_all = torch.linspace(-1, 1, 11)
-# mu_all = torch.linspace(-3, 3, 11)
 
-sigma_all = torch.tensor([0.3,0.25,0.1,0.15,0.4,0.45,0.2,0.25,0.5,0.55,0.6,0.35,0.5222,0.4790,0.3103,0.2295])
-mu_all = torch.tensor([-3,-2.5,-2,-1.5,-1,-0.5,0.5,1,1.5,2,2.5,3,2.4487,-0.5704,1.7028,-1.1801])
+sigma_all = torch.linspace(0.1, 3, 256)
+mu_all = torch.linspace(-3, 3, 256)
+
+# sigma_all = torch.tensor([0.3,0.25,0.1,0.15,0.4,0.45,0.2,0.25,0.5,0.55,0.6,0.35,0.5222,0.4790,0.3103,0.2295])
+# mu_all = torch.tensor([-3,-2.5,-2,-1.5,-1,-0.5,0.5,1,1.5,2,2.5,3,2.4487,-0.5704,1.7028,-1.1801])
 
 
 all_metrics = {}
@@ -110,14 +112,14 @@ for _index in range(len(sigma_all)):
 with open(saved_path +'/' + 'all_metrics.pkl', 'wb') as f:
     pickle.dump(all_metrics, f)
 
-# metrics_plot_2(sigma_all,mu_all,all_metrics,'dice',saved_path)
-# metrics_plot_2(sigma_all,mu_all,all_metrics,'dice_non_empty',saved_path)
-# metrics_plot_2(sigma_all,mu_all,all_metrics,'iou',saved_path)
-# metrics_plot_2(sigma_all,mu_all,all_metrics,'iou_non_empty',saved_path)
-# metrics_plot_2(sigma_all,mu_all,all_metrics,'hd',saved_path)
-# metrics_plot_2(sigma_all,mu_all,all_metrics,'hd95',saved_path)
-# metrics_plot_2(sigma_all,mu_all,all_metrics,'ece_addnoise',saved_path)
-# metrics_plot_2(sigma_all,mu_all,all_metrics,'nll',saved_path)
+metrics_plot_2(sigma_all,mu_all,all_metrics,'dice',saved_path)
+metrics_plot_2(sigma_all,mu_all,all_metrics,'dice_non_empty',saved_path)
+metrics_plot_2(sigma_all,mu_all,all_metrics,'iou',saved_path)
+metrics_plot_2(sigma_all,mu_all,all_metrics,'iou_non_empty',saved_path)
+metrics_plot_2(sigma_all,mu_all,all_metrics,'hd',saved_path)
+metrics_plot_2(sigma_all,mu_all,all_metrics,'hd95',saved_path)
+metrics_plot_2(sigma_all,mu_all,all_metrics,'ece_addnoise',saved_path)
+metrics_plot_2(sigma_all,mu_all,all_metrics,'nll',saved_path)
 
 
 

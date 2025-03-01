@@ -37,7 +37,7 @@ parser.add_argument("--InducingPtsType", type=str, default="uniform") # 'fixed' 
 parser.add_argument("--grid_size", type=int, default=2) 
 parser.add_argument("--feat_dim", type=int, default=64)
 parser.add_argument("--FeatBatchNorm", type=str, default="noadd") # 'add' # 'noadd'
-parser.add_argument("--loss_type", type=str, default="dice_BCE_voted") # dice; BCE; dice_BCE; dice_BCE_voted;dice_voted  # likelihood
+parser.add_argument("--loss_type", type=str, default="dice_BCE") # dice; BCE; dice_BCE; dice_BCE_voted;dice_voted  # likelihood
 parser.add_argument("--loss_add_mu_reg", type=str, default="sum_2") # 'add' # 'noadd' # sum_2
 parser.add_argument("--load_pretrained_Unet", type=str, default="noload") # 'load' # 'noload'
 parser.add_argument("--trained_Unet", type=str, default="trainU") # 'trainU' # 'notrainU'
@@ -47,12 +47,12 @@ parser.add_argument("--data_aug", type=str, default="noadd") # 'add' # 'noadd'; 
 # 'add3sigmas': add three different sigmas; 
 # 'add3sigmas3mus': add three different sigmas and three different mus
 # 'noadd'; no noise added
-parser.add_argument("--addnoise", type=str, default="add") 
+parser.add_argument("--addnoise", type=str, default="add3sigmas3mus") 
 parser.add_argument("--addnoise_pred", type=str, default="noadd") # 'add' # 'noadd'; obtain the noise prediction, rather than underlying ground truth
 parser.add_argument("--kernel_type", type=str, default="RBF") # 'RBF' # 'Cosine' # 'Linear' # RBF_Linear
 parser.add_argument("--nll_type", type=str, default="VariationalELBO")
 parser.add_argument("--retrain", type=str, default="noload") # 'load' # 'noload'
-parser.add_argument("--retrain_epoch", type=int, default=320) 
+parser.add_argument("--retrain_epoch", type=int, default=0) 
 
 parser.add_argument("--seed", type=int,default=0)
 parser.add_argument("--cp_path", type=str, default="checkpoints")

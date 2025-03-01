@@ -2,11 +2,8 @@ gpytorch==1.13
 linear_operator==0.5.3
 matplotlib==3.8.2
 monai==1.4.0
-nibabel==5.3.2
 numpy==2.2.3
-opencv_python==4.11.0.86
 scipy==1.15.2
-SimpleITK==2.4.0
 SimpleITK==2.4.1
 torch==2.5.1+cu121
 torchmetrics==1.6.1
