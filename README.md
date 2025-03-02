@@ -15,22 +15,22 @@ The following shows the data structure requirement if you want to train the mode
     data/
     │
     ├── images/
-        ├── VOLXX.nii.gz: US volume, including a number of US slices 
+        ├── VOLXX.nii.gz  # US volume, including a number of US slices 
         ├── ... 
     ├── seg_01/  # Annotation of rater 1
-        ├── label_VOLXX.nii.gz: Annotation1 of the corresponding US volume
+        ├── label_VOLXX.nii.gz  # Annotation1 of the corresponding US volume
         ├── ... 
     ├── seg_02/  # Annotation of rater 2
-        ├── label_VOLXX.nii.gz: Annotation2 of the corresponding US volume
+        ├── label_VOLXX.nii.gz  # Annotation2 of the corresponding US volume
         ├── ... 
     ├── seg_03/  # Annotation of rater 3
-        ├── label_VOLXX.nii.gz: Annotation3 of the corresponding US volume
+        ├── label_VOLXX.nii.gz  # Annotation3 of the corresponding US volume
         ├── ... 
     ├── seg_MV/  # Majority vote annotation
-        ├── label_VOLXX.nii.gz: Majority vote annotation of the corresponding US volume
+        ├── label_VOLXX.nii.gz  # Majority vote annotation of the corresponding US volume
         ├── ... 
     ├── seg_HQ/  # High quality annotation
-        ├── label_VOLXX.nii.gz: High quality annotation of the corresponding US volume
+        ├── label_VOLXX.nii.gz  # High quality annotation of the corresponding US volume
         ├── ... 
 
 ```
