@@ -44,7 +44,7 @@ class DataSet(Dataset):
         if self.simulated_model:
             self.seg_path_simulated = os.path.join(self.datapath,'data_simulation', self.simulated_model,"sigma_"+'%.04f'%self.sigma+"_mu_"+'%.04f'%self.mu)
 
-        self.seg_path_simulated_ind = os.path.join(self.datapath,'data_simulation_ind',"bias_"+'%.04f'%self.mu+"_variance_"+'%.04f'%self.sigma)
+        # self.seg_path_simulated_ind = os.path.join(self.datapath,'data_simulation_ind',"bias_"+'%.04f'%self.mu+"_variance_"+'%.04f'%self.sigma)
         
     def split_data(self,split_ratio=[3,1,1]):
         # randon split data, and save the name of each case into a file, saved in json format
