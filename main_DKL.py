@@ -1,6 +1,4 @@
 
-# Deep Kernel Learning for Gaussian Process using GPytorch
-
 import os
 import sys
 import argparse

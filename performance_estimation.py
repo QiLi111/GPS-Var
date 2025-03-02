@@ -1,7 +1,4 @@
 
-# given a model trained with three labels, formulated with three sigmas and three mus
-# obtain the performance of any dataset with any sigma and mu
-
 import os
 import torch
 import csv
