@@ -26,7 +26,7 @@ The following shows the data structure requirement if you want to train the mode
     ├── seg_03/  # Annotation of rater 3
         ├── label_VOLXX.nii.gz: Annotation3 of the corresponding US volume
         ├── ... 
-    ├── seg_majority_vote/  # Majority vote annotation
+    ├── seg_MV/  # Majority vote annotation
         ├── label_VOLXX.nii.gz: Majority vote annotation of the corresponding US volume
         ├── ... 
     ├── seg_HQ/  # High quality annotation
