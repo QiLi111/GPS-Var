@@ -38,7 +38,7 @@ class DataSet(Dataset):
         self.seg_path_GT = os.path.join(self.datapath, 'seg_HQ')
         self.observation_labels = [self.seg_path1, self.seg_path2, self.seg_path3]
         self.observation_labels_4 = [self.seg_path1, self.seg_path2, self.seg_path3, self.seg_path_GT]
-        self.seg_path_voted = os.path.join(self.datapath, 'seg_majority_vote')
+        self.seg_path_voted = os.path.join(self.datapath, 'seg_MV')
 
         # path of simulated labels
         if self.simulated_model:
