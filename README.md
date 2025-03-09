@@ -11,7 +11,7 @@ pip install -r requirements.txt
 
 ## Data structure
 The following shows the data structure requirement if you want to train the model on your own data.
-```
+``` bash
     data/
     │
     ├── images/
