@@ -6,7 +6,7 @@ numpy==1.26.4
 scipy==1.12.0
 SimpleITK==2.4.0
 torchmetrics==1.6.1
-torchvision==0.20.1
+torchvision==0.16.1
 tensorboard==2.15.1
 --extra-index-url https://download.pytorch.org/whl/cu121
 torch==2.5.1+cu121
