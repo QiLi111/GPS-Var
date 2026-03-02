@@ -1,6 +1,7 @@
-# Influence of Label Bias and Variance on Model Performance: Gaussian Process Formulation
+# Interpretable Probabilistic Medical Image Segmentation via Gaussian Process with Explicit Modelling of Annotation Bias and Variability
 
-This repository is the official implementation for "Influence of Label Bias and Variance on Model Performance: Gaussian Process Formulation". It contains the algorithm of a Gaussian Process-based framework for the task of medical image segmentation, which parameterises intra-rater and inter-rater variability with bias and variance, enabling quantification of their correlations with model performance. By formulating model performance as a probabilistic function of intra-rater and inter-rater variability, the proposed approach allows for explicit modeling of how label variability propagate through the training process and affect prediction accuracy.
+This repository is the official implementation for "Interpretable Probabilistic Medical Image Segmentation via Gaussian Process with Explicit Modelling of Annotation Bias and Variability". It introduces a logit-space probabilistic segmentation framework with explicit modelling of inter- and intra-rater variability. Using a stochastic variational Gaussian Process, the model yields closed-form rater-conditioned predictive probabilities. This enables systematic examination of how annotator bias and variability affect calibration and segmentation performance, which is demonstrated on real-word clinical data.
+
 
 ## Install conda environment
 ``` bash
@@ -35,14 +36,14 @@ The following shows the data structure requirement if you want to train the mode
 
 ```
 
-## Train a GP model
+## Train a SVGP model
 ``` bash
-python3 main_DKL.py
+python3 main.py
 ``` 
 
 ## Test
 ``` bash
-python3 main_DKL_test.py
+python3 main_test.py
 ``` 
 ## Query performance at various bias and variance
 ``` bash
