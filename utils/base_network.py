@@ -197,7 +197,7 @@ class GaussianProcessLayer(gpytorch.models.ApproximateGP):
 
     
 class GPClassificationModel(gpytorch.models.ApproximateGP):
-    def __init__(self, inducing_points,hyperparameter_fixed,kernel_type):
+    def __init__(self, inducing_points,kernel_type):
         variational_distribution = gpytorch.variational.CholeskyVariationalDistribution(inducing_points.size(0))
         
         variational_strategy = gpytorch.variational.VariationalStrategy(self, 
@@ -215,48 +215,6 @@ class GPClassificationModel(gpytorch.models.ApproximateGP):
         else:
             raise ValueError('Invalid kernel type. Supported type is: RBF')
 
-        
-        if hyperparameter_fixed == 'fixed' and kernel_type == 'RBF':
-            print('Hyperparameters fixed')
-
-            # Fix kernel hyperparameters
-            self.covar_module.outputscale = 1.0  # Fix variance
-            self.covar_module.raw_outputscale.requires_grad = False
-
-            self.covar_module.base_kernel.lengthscale = 2.0  # Fix lengthscale
-            self.covar_module.base_kernel.raw_lengthscale.requires_grad = False  # Prevent updates
-
-        elif hyperparameter_fixed == 'fixed' and kernel_type == 'Cosine':
-            print('Hyperparameters fixed')
-
-            # Fix kernel hyperparameters
-            self.covar_module.outputscale = 1.0
-            self.covar_module.raw_outputscale.requires_grad = False
-
-            self.covar_module.base_kernel.period_length = 2.0
-            self.covar_module.base_kernel.raw_period_length.requires_grad = False
-
-        elif hyperparameter_fixed == 'fixed' and kernel_type == 'Linear':
-            print('Hyperparameters fixed')
-
-            # Fix kernel hyperparameters
-            self.covar_module.outputscale = 1.0
-            self.covar_module.raw_outputscale.requires_grad = False
-
-            self.covar_module.base_kernel.variance = 2.0
-            self.covar_module.base_kernel.raw_variance.requires_grad = False
-        elif hyperparameter_fixed == 'fixed' and kernel_type == 'RBF_Linear':
-            print('Hyperparameters fixed')
-
-            # Fix kernel hyperparameters
-            self.covar_module.outputscale = 1.0
-            self.covar_module.raw_outputscale.requires_grad = False
-
-            self.covar_module.base_kernel.kernels[0].lengthscale = 2.0
-            self.covar_module.base_kernel.kernels[0].raw_lengthscale.requires_grad = False
-
-            self.covar_module.base_kernel.kernels[1].variance = 2.0
-            self.covar_module.base_kernel.kernels[1].raw_variance.requires_grad = False
 
         
 
@@ -269,10 +227,10 @@ class GPClassificationModel(gpytorch.models.ApproximateGP):
 
 
 class DKLModelInducingPts(gpytorch.Module):
-    def __init__(self, feature_extractor, inducing_points, hyperparameter_fixed, kernel_type):
+    def __init__(self, feature_extractor, inducing_points, kernel_type):
         super(DKLModelInducingPts, self).__init__()
         self.feature_extractor = feature_extractor
-        self.gp_layer = GPClassificationModel(inducing_points = inducing_points, hyperparameter_fixed = hyperparameter_fixed, kernel_type = kernel_type)
+        self.gp_layer = GPClassificationModel(inducing_points = inducing_points, kernel_type = kernel_type)
 
     def forward(self, x):
         features = self.feature_extractor(x)

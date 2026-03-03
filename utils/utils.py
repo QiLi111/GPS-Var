@@ -589,26 +589,26 @@ def get_saved_folder_name(args):
     
 
     if args.addnoise == "add":
-        A = "AddNoise_"
+        A = "AddNoise__"
     elif args.addnoise == "noadd":
-        A = "NoAddNoise_"
+        A = "NoAddNoise__"
     elif args.addnoise == "add3sigmas":
-        A = "Add3Sigmas_"
+        A = "Add3Sigmas__"
     elif args.addnoise == "add3sigmas3mus":
-        A = "Add3Sigmas3Mus_"
+        A = "Add3Sigmas3Mus__"
     
     if args.addnoise_pred == 'add':
-        A = A + "AddNoisePred_"
+        A = A + "AddNoisePred__"
     elif args.addnoise_pred == 'noadd':
-        A = A + "NoAddNoisePred_"
+        A = A + "NoAddNoisePred__"
 
     
     if args.loss_add_mu_reg == "add":
-        A = A + "AddMuReg_"
+        A = A + "AddMuReg__"
     elif args.loss_add_mu_reg == "noadd":
-        A = A + "NoAddMuReg_"
+        A = A + "NoAddMuReg__"
     elif args.loss_add_mu_reg == "sum_2":
-        A = A + "Sum2MuReg_"
+        A = A + "Sum2MuReg__"
     
 
     if args.retrain == "load":

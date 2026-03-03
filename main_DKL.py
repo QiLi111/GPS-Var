@@ -3,11 +3,9 @@ import os
 import sys
 import argparse
 import torch
-import torch.nn as nn
-import torchvision as tv
 from torch.utils.tensorboard import SummaryWriter
 import gpytorch
-env_path = os.path.join(os.path.dirname(__file__), '..') #This may or may not work hehe
+env_path = os.path.join(os.path.dirname(__file__), '..')
 sys.path.append(env_path)
 from utils.utils import *
 from utils.data_loader import DataSet
@@ -28,12 +26,12 @@ parser.add_argument("--labels", type=str, default="random4") #
 # "seg_1_2_3_HQ": use three avaliable labels and the high quality label for inference
 parser.add_argument("--labels_infer", type=str, default="seg_1_2_3_HQ") 
 parser.add_argument("--VariationalStrategy", type=str, default="InducingPts") # 'Grid' # 'InducingPts' 
-parser.add_argument("--num_indu", type=int, default=500) #number of inducing points
+parser.add_argument("--num_indu", type=int, default=512) #number of inducing points
 parser.add_argument("--InducingPtsType", type=str, default="uniform") # 'fixed' # 'uniform'
 parser.add_argument("--grid_size", type=int, default=2) 
 parser.add_argument("--feat_dim", type=int, default=64)
 parser.add_argument("--FeatBatchNorm", type=str, default="noadd") # 'add' # 'noadd'
-parser.add_argument("--loss_type", type=str, default="dice_BCE_kl") # dice_BCE_kl; dice; BCE; dice_BCE; dice_BCE_voted;dice_voted  # likelihood
+parser.add_argument("--loss_type", type=str, default="dice_BCE_kl") # dice_BCE_kl; dice; BCE; dice_BCE
 parser.add_argument("--loss_add_mu_reg", type=str, default="sum_2") # 'add' # 'noadd' # sum_2
 parser.add_argument("--load_pretrained_Unet", type=str, default="noload") # 'load' # 'noload'
 parser.add_argument("--trained_Unet", type=str, default="trainU") # 'trainU' # 'notrainU'
@@ -44,8 +42,8 @@ parser.add_argument("--data_aug", type=str, default="noadd") # 'add' # 'noadd'; 
 # 'add3sigmas3mus': add three different sigmas and three different mus
 # 'noadd'; no noise added
 parser.add_argument("--addnoise", type=str, default="add3sigmas3mus") 
-parser.add_argument("--addnoise_pred", type=str, default="noadd") # 'add' # 'noadd'; obtain the noise prediction, rather than underlying ground truth
-parser.add_argument("--kernel_type", type=str, default="RBF") # 'RBF' # 'Cosine' # 'Linear' # RBF_Linear
+parser.add_argument("--addnoise_pred", type=str, default="noadd") # 'add' # 'noadd'
+parser.add_argument("--kernel_type", type=str, default="RBF") # 'RBF' 
 parser.add_argument("--nll_type", type=str, default="VariationalELBO")
 parser.add_argument("--retrain", type=str, default="noload") # 'load' # 'noload'
 parser.add_argument("--retrain_epoch", type=int, default=0) 
@@ -97,7 +95,7 @@ def main(args):
     # strategy for scalable GP
     if args.VariationalStrategy == 'InducingPts':
         inducing_points = generate_inducing_points(feature_extractor,num_features,train_set,args,device)
-        model = DKLModelInducingPts(feature_extractor, inducing_points=inducing_points,hyperparameter_fixed=args.hyperparameter, kernel_type = args.kernel_type)
+        model = DKLModelInducingPts(feature_extractor, inducing_points=inducing_points,kernel_type = args.kernel_type)
 
     # grid is not used in the project
     elif args.VariationalStrategy == 'Grid':
@@ -110,27 +108,7 @@ def main(args):
         likelihood = gpytorch.likelihoods.BernoulliLikelihood()
     else:
         raise ValueError("Invalid noise type")
-    
-    if args.hyperparameter == 'fixed' and args.addnoise == 'add':
-        likelihood.noise = 1e-2
-        likelihood.noise_covar.raw_noise.requires_grad = False
-
-    elif args.hyperparameter == 'fixed' and args.addnoise == 'add3sigmas':
-        likelihood.noise = torch.tensor([1e-2,1e-1,1e-2])
-        likelihood.noise_covar[0].raw_noise0.requires_grad = False
-        likelihood.noise_covar[1].raw_noise1.requires_grad = False
-        likelihood.noise_covar[2].raw_noise2.requires_grad = False
-        # for param_name, param in likelihood.named_parameters():
-        #     print(f'Parameter name: {param_name:42} value = {param.item()}')
-    elif args.hyperparameter == 'fixed' and args.addnoise == 'add3sigmas3mus':
-        likelihood.noise = torch.tensor([1e-2,1e-1,1e-2,0,0,0])
-        likelihood.noise_covar[0].raw_noise0.requires_grad = False
-        likelihood.noise_covar[1].raw_noise1.requires_grad = False
-        likelihood.noise_covar[2].raw_noise2.requires_grad = False
-        likelihood.noise_covar[3].raw_mu0.requires_grad = False
-        likelihood.noise_covar[4].raw_mu1.requires_grad = False
-        likelihood.noise_covar[5].raw_mu2.requires_grad = False
-        
+            
 
     model.to(device)
     likelihood.to(device)

@@ -7,3 +7,5 @@ sh/
 *.png
 *.nii.gz
 *.zip
+Add*/
+data/
