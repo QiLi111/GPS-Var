@@ -64,20 +64,28 @@ class BernoulliLikelihood_Base(_OneDimensionalLikelihood):
         r"""
         :return: Analytic marginal :math:`p(\mathbf y)`.
         """
+
+        
+
         mean = function_dist.mean
         if args[0] == 'add3sigmas' or args[0] == 'add' or args[0] == 'noadd':
             full_mean = mean
 
         elif args[0] == 'add3sigmas3mus':
-            if len(self.noise)!=6:
+            num_annos = args[2] # number of annotators
+            if len(self.noise)!=num_annos*2:
                 raise ValueError("wrong noise & mu length")
             
-            mu_valuse = self.noise[3:]
-            if len(mu_valuse)!=3:
+            mu_valuse = self.noise[num_annos:]
+            if len(mu_valuse)!=num_annos:
                 raise ValueError("wrong mu length")
             mu_list = []
             for i in args[1]:
-                mu_list.append(mu_valuse[i].expand(403 * 361))
+                if i == num_annos:
+                    # do not add noise
+                    mu_list.append(torch.zeros(int(mean.shape[0]/args[3])).to(mean.device))
+                else:
+                    mu_list.append(mu_valuse[i].expand(int(mean.shape[0]/args[3])))
 
             full_mean = mean + torch.cat(mu_list).to(mean.device)
 
@@ -90,7 +98,11 @@ class BernoulliLikelihood_Base(_OneDimensionalLikelihood):
                 raise ValueError("wrong mu length")
             mu_list = []
             for i in range(len(args[1])):
-                mu_list.append(mu_valuse.expand(403 * 361))
+                if i ==3:
+                    # do not add noise
+                    mu_list.append(torch.zeros(403 * 361).to(mean.device))
+                else:
+                    mu_list.append(mu_valuse.expand(403 * 361))
 
             full_mean = mean + torch.cat(mu_list).to(mean.device)
 
@@ -108,10 +120,14 @@ class BernoulliLikelihood_Base(_OneDimensionalLikelihood):
 
         elif args[0] == 'add3sigmas' or args[0] == 'add3sigmas3mus':
 
-            noise_values = self.noise[:3]
+            noise_values = self.noise[:num_annos]
             noise_list = []
             for i in args[1]:
-                noise_list.append(noise_values[i].expand(403 * 361))
+                if i == num_annos:
+                    # do not add noise - high quality data, so we do not want to add noise to it
+                    noise_list.append(torch.zeros(int(mean.shape[0]/args[3])).to(var.device))
+                else:
+                    noise_list.append(noise_values[i].expand(int(mean.shape[0]/args[3])))
 
             noise_covar = torch.cat(noise_list).to(var.device)
             full_covar = var + noise_covar
@@ -120,7 +136,11 @@ class BernoulliLikelihood_Base(_OneDimensionalLikelihood):
             noise_values = self.noise[:1]
             noise_list = []
             for i in range(len(args[1])):
-                noise_list.append(noise_values.expand(403 * 361))
+                if i == 3:
+                    # do not add noise
+                    noise_list.append(torch.zeros(403 * 361).to(var.device))
+                else:
+                    noise_list.append(noise_values.expand(403 * 361))
         
             noise_covar = torch.cat(noise_list).to(var.device)
             full_covar = var + noise_covar
@@ -201,32 +221,33 @@ class BernoulliLikelihood_with_Noise(BernoulliLikelihood_Base):
             
         elif self.kwargs['addnoise'] == 'add3sigmas3mus':
 
-            # set noise
-            noise_covar0 = HomoskedasticNoise_adapted(
-                noise_prior=noise_prior, noise_constraint=noise_constraint, batch_shape=batch_shape,para_name='raw_noise0'
-            )
-            noise_covar1 = HomoskedasticNoise_adapted(
-                noise_prior=noise_prior, noise_constraint=noise_constraint, batch_shape=batch_shape,para_name='raw_noise1'
-            )
-            noise_covar2 = HomoskedasticNoise_adapted(
-                noise_prior=noise_prior, noise_constraint=noise_constraint, batch_shape=batch_shape,para_name='raw_noise2'
-            )
+            # for anno in range(self.kwargs['num_annotators']):
+            noise_covar = torch.nn.ModuleList()
 
-            # set mu
+            num_ann = self.kwargs['num_annotators']
             mu_constraint = Interval(-10000, 10000)
 
-            mu_0 = HomoskedasticNoise_adapted(
-                noise_prior=noise_prior, noise_constraint=mu_constraint, batch_shape=batch_shape,para_name='raw_mu0'
-            )
-            mu_1 = HomoskedasticNoise_adapted(
-                noise_prior=noise_prior, noise_constraint=mu_constraint, batch_shape=batch_shape,para_name='raw_mu1'
-            )
-            mu_2 = HomoskedasticNoise_adapted(
-                noise_prior=noise_prior, noise_constraint=mu_constraint, batch_shape=batch_shape,para_name='raw_mu2'
-            )
+            for i in range(num_ann):
+                # noise
+                noise_i = HomoskedasticNoise_adapted(
+                    noise_prior=noise_prior,
+                    noise_constraint=noise_constraint,
+                    batch_shape=batch_shape,
+                    para_name=f'raw_noise{i}'
+                )
+                noise_covar.append(noise_i)
 
-            noise_covar = torch.nn.ModuleList([noise_covar0, noise_covar1, noise_covar2, mu_0, mu_1, mu_2])
+            for i in range(num_ann):
+                # mu
+                mu_i = HomoskedasticNoise_adapted(
+                    noise_prior=noise_prior,
+                    noise_constraint=mu_constraint,
+                    batch_shape=batch_shape,
+                    para_name=f'raw_mu{i}'
+                )
 
+                
+                noise_covar.append(mu_i)
 
 
         elif self.kwargs['addnoise'] == 'add':
@@ -257,7 +278,8 @@ class BernoulliLikelihood_with_Noise(BernoulliLikelihood_Base):
         elif self.kwargs['addnoise'] == 'add3sigmas':
             return torch.cat((self.noise_covar[0].noise, self.noise_covar[1].noise, self.noise_covar[2].noise))
         elif self.kwargs['addnoise'] == 'add3sigmas3mus':
-            return torch.cat((self.noise_covar[0].noise, self.noise_covar[1].noise, self.noise_covar[2].noise, self.noise_covar[3].noise, self.noise_covar[4].noise, self.noise_covar[5].noise))
+            return torch.cat([nc.noise for nc in self.noise_covar])
+
         elif self.kwargs['addnoise'] == 'add_1_bias_variance':
             return torch.cat((self.noise_covar[0].noise, self.noise_covar[1].noise))
         
@@ -273,12 +295,16 @@ class BernoulliLikelihood_with_Noise(BernoulliLikelihood_Base):
             self.noise_covar[1].initialize(noise=value[1])
             self.noise_covar[2].initialize(noise=value[2])
         elif self.kwargs['addnoise'] == 'add3sigmas3mus':
-            self.noise_covar[0].initialize(noise=value[0])
-            self.noise_covar[1].initialize(noise=value[1])
-            self.noise_covar[2].initialize(noise=value[2])
-            self.noise_covar[3].initialize(noise=value[3])
-            self.noise_covar[4].initialize(noise=value[4])
-            self.noise_covar[5].initialize(noise=value[5])
+
+            assert len(value) == len(self.noise_covar), \
+                "Length of value must match number of noise parameters"
+
+            for nc, v in zip(self.noise_covar, value):
+                nc.initialize(noise=v)
+
+
+
+
         elif self.kwargs['addnoise'] == 'add_1_bias_variance':
             self.noise_covar[0].initialize(noise=value[0])
             self.noise_covar[1].initialize(noise=value[1])
@@ -293,7 +319,19 @@ class BernoulliLikelihood_with_Noise(BernoulliLikelihood_Base):
         elif self.kwargs['addnoise'] == 'add3sigmas':
             return torch.cat((self.noise_covar[0].raw_noise0, self.noise_covar[1].raw_noise1, self.noise_covar[2].raw_noise2))
         elif self.kwargs['addnoise'] == 'add3sigmas3mus':
-            return torch.cat((self.noise_covar[0].raw_noise0, self.noise_covar[1].raw_noise1, self.noise_covar[2].raw_noise2, self.noise_covar[3].raw_mu0, self.noise_covar[4].raw_mu1, self.noise_covar[5].raw_mu2))
+            
+            num_ann = self.kwargs['num_annotators']
+
+            return torch.cat(
+                [getattr(self.noise_covar[i], f'raw_noise{i}').view(-1)
+                for i in range(num_ann)]
+                +
+                [getattr(self.noise_covar[num_ann + i], f'raw_mu{i}').view(-1)
+                for i in range(num_ann)]
+            )
+
+
+        
         elif self.kwargs['addnoise'] == 'add_1_bias_variance':
             return torch.cat((self.noise_covar[0].raw_noise0, self.noise_covar[1].raw_mu0))
         else:
@@ -310,12 +348,21 @@ class BernoulliLikelihood_with_Noise(BernoulliLikelihood_Base):
             self.noise_covar[1].initialize(raw_noise1=value[1])
             self.noise_covar[2].initialize(raw_noise2=value[2])
         elif self.kwargs['addnoise'] == 'add3sigmas3mus':
-            self.noise_covar[0].initialize(raw_noise0=value[0])
-            self.noise_covar[1].initialize(raw_noise1=value[1])
-            self.noise_covar[2].initialize(raw_noise2=value[2])
-            self.noise_covar[3].initialize(raw_mu0=value[3])
-            self.noise_covar[4].initialize(raw_mu1=value[4])
-            self.noise_covar[5].initialize(raw_mu2=value[5])
+           
+            num_ann = self.kwargs['num_annotators']
+            assert len(value) == 2 * num_ann
+
+            for i in range(num_ann):
+                self.noise_covar[i].initialize(
+                    **{f'raw_noise{i}': value[i]}
+                )
+
+            for i in range(num_ann):
+                self.noise_covar[num_ann + i].initialize(
+                    **{f'raw_mu{i}': value[num_ann + i]}
+                )
+
+
         elif self.kwargs['addnoise'] == 'add_1_bias_variance':
             self.noise_covar[0].initialize(raw_noise0=value[0])
             self.noise_covar[1].initialize(raw_mu0=value[1])

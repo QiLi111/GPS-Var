@@ -45,7 +45,7 @@ with open(os.getcwd()+'/'+ fd_name_save +'/'+csv_name, 'a', encoding='UTF8') as 
 # get args
 if 'args.txt' in os.listdir(folder_path): 
     args = get_args(os.path.join(folder_path,'args.txt'),folder)
-    args.batch_size_val = 4
+    args.batch_size_val = 1
     args.saved_name = models_folders+'/'+args.saved_name
     args.pre_labels = args.labels
     args.labels = 'inference'
@@ -67,68 +67,13 @@ print("pytorch using device", device)
 dataset = DataSet(datapath=args.dataset,num_class=args.num_class,labels=args.labels,labels_inference = args.labels_infer,data_aug=args.data_aug)
 # dataset.split_data()
 _,_,test_set = dataset.load_data_split(os.path.join(args.dataset,'data_split','train_list.json'),os.path.join(args.dataset,'data_split','val_list.json'),os.path.join(args.dataset,'data_split','test_list.json'))
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=int(args.batch_size_val), shuffle=False, num_workers=8)
-
-# grid sample sigma and mu
-# sigma_all = torch.linspace(0.1, 5, 99) #19
-# mu_all = torch.linspace(-5, 5, 41) #21
-# sigma_all = torch.linspace(0.1, 1.2, 11) #19
-# mu_all = torch.linspace(-1, 1, 11)
-
-sigma_all = torch.linspace(0.1, 3, 256)
-mu_all = torch.linspace(-3, 3, 256)
-
-# sigma_all = torch.tensor([0.3,0.25,0.1,0.15,0.4,0.45,0.2,0.25,0.5,0.55,0.6,0.35,0.5222,0.4790,0.3103,0.2295])
-# mu_all = torch.tensor([-3,-2.5,-2,-1.5,-1,-0.5,0.5,1,1.5,2,2.5,3,2.4487,-0.5704,1.7028,-1.1801])
+test_loader = torch.utils.data.DataLoader(test_set, batch_size=int(args.batch_size_val), shuffle=False, num_workers=0)
 
 
-all_metrics = {}
-# for sigma in sigma_all:
-#     for mu in mu_all:
-for _index in range(len(sigma_all)):
-    sigma = sigma_all[_index]
-    mu = mu_all[_index]
-
-    if True:
-        metrics,hyperpara,metrics_addnoise,saved_model_name,saved_likelihood_name = test_DKL_grid_sample(test_set,test_loader,args,device,models_folders+'/'+folder,sigma,mu,saved_path)
-        all_metrics[(sigma.item(),mu.item())] = metrics_addnoise
-        # save metrics and hyperparameters
-        save_metrics_grid_sample(os.getcwd()+'/'+ fd_name_save +'/'+csv_name,folder,metrics,hyperpara,metrics_addnoise,saved_model_name,saved_likelihood_name,args,sigma,mu)        
-
-
-        with open(saved_path +'/'+ 'sigma' + str('%.4f'% sigma.item()) + '_mu' + str('%.4f'%mu.item()) + '_' + folder +'_hyperparameters.pkl', 'wb') as f:
-            pickle.dump(hyperpara, f)
-        with open(saved_path +'/' + 'sigma' + str('%.4f'%sigma.item()) + '_mu' + str('%.4f'%mu.item()) + '_' + folder +'_metrics_addnoise.pkl', 'wb') as f:
-            pickle.dump(metrics_addnoise, f)
-        with open(saved_path +'/' + 'sigma' + str('%.4f'%sigma.item()) + '_mu' + str('%.4f'%mu.item()) + '_' + folder +'_metrics.pkl', 'wb') as f:
-            pickle.dump(metrics, f)
-
-
-# # plot the performance of sigma and mu
-
-with open(saved_path +'/' + 'all_metrics.pkl', 'wb') as f:
-    pickle.dump(all_metrics, f)
-
-metrics_plot_2(sigma_all,mu_all,all_metrics,'dice',saved_path)
-metrics_plot_2(sigma_all,mu_all,all_metrics,'dice_non_empty',saved_path)
-metrics_plot_2(sigma_all,mu_all,all_metrics,'iou',saved_path)
-metrics_plot_2(sigma_all,mu_all,all_metrics,'iou_non_empty',saved_path)
-metrics_plot_2(sigma_all,mu_all,all_metrics,'hd',saved_path)
-metrics_plot_2(sigma_all,mu_all,all_metrics,'hd95',saved_path)
-metrics_plot_2(sigma_all,mu_all,all_metrics,'ece_addnoise',saved_path)
-metrics_plot_2(sigma_all,mu_all,all_metrics,'nll',saved_path)
+all_metrics, sigma_all, mu_all = test_DKL_grid_sample(test_set,test_loader,args,device,models_folders+'/'+folder,saved_path)     
 
 
 
-
-
-
-
-
-
-# load saved metrics
-# with open('saved_dictionary.pkl', 'rb') as f:
-#     loaded_dict = pickle.load(f)
     
 
     

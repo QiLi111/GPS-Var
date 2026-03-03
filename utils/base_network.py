@@ -48,34 +48,6 @@ class UNet(nn.Module):
         logits = self.outc(x)
         return logits
 
-class UNet_linear(UNet):
-
-    def __init__(self, n_channels, n_classes, feat_dim, bilinear=False,FeatBN = 'noadd',
-                 noise_values=None,mu_values=None,
-                 lower_bound_sigma = 1e-4, upper_bound_mu = 10000.0, lower_bound_mu = -10000.0):
-        super(UNet_linear, self).__init__(n_channels, n_classes*2, feat_dim, bilinear,FeatBN)
-        if noise_values is not None:
-            self.noise_values = nn.parameter.Parameter(torch.from_numpy(noise_values).float(),requires_grad=True)
-        else:
-            self.noise_values = nn.parameter.Parameter(torch.zeros(3).float(),requires_grad=True)
-        if mu_values is not None:
-            self.mu_values = nn.parameter.Parameter(torch.from_numpy(mu_values).float(),requires_grad=True)
-        else:
-            self.mu_values = nn.parameter.Parameter(torch.zeros(3).float(),requires_grad=True)
-
-        self.lower_bound_sigma = lower_bound_sigma
-        self.upper_bound_mu = upper_bound_mu
-        self.lower_bound_mu = lower_bound_mu
-        self.mu_activation = lambda x,lower_bound, upper_bound: torch.sigmoid(x)*(upper_bound-lower_bound) + lower_bound
-        self.Softplus = nn.Softplus()
-    
-    @property
-    def transform_mu(self):
-        return self.mu_activation(self.mu_values,self.lower_bound_mu,self.upper_bound_mu)
-
-    @property    
-    def transform_sigma(self):
-        return self.Softplus(self.noise_values) + self.lower_bound_sigma
 
 
 class UNetFeatureExtractor(nn.Module):
@@ -223,26 +195,11 @@ class GaussianProcessLayer(gpytorch.models.ApproximateGP):
         covar = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean, covar)
 
-
     
 class GPClassificationModel(gpytorch.models.ApproximateGP):
     def __init__(self, inducing_points,hyperparameter_fixed,kernel_type):
         variational_distribution = gpytorch.variational.CholeskyVariationalDistribution(inducing_points.size(0))
         
-        # self.noise_observation = add_observation_noise
-        # if self.noise_observation == 'homoscedasticity':
-        #     self.raw_noise = torch.nn.Parameter(0.1 * torch.ones(1, 1), requires_grad=True)
-        #     self.register_constraint("raw_noise", gpytorch.constraints.Positive())
-        #     self.register_parameter(name="inducing_points", parameter=torch.nn.Parameter(inducing_points))
-
-        
-        
-        #     variational_strategy = gpytorch.variational.VariationalStrategy(self, 
-        #                                                                 inducing_points, 
-        #                                                                 variational_distribution, 
-        #                                                                 learn_inducing_locations=True,
-        #                                                                 jitter_val = self.raw_noise)
-        # elif self.noise_observation == 'noadd':
         variational_strategy = gpytorch.variational.VariationalStrategy(self, 
                                                                         inducing_points, 
                                                                         variational_distribution, 
@@ -251,37 +208,13 @@ class GPClassificationModel(gpytorch.models.ApproximateGP):
 
         super(GPClassificationModel, self).__init__(variational_strategy)
         self.mean_module = gpytorch.means.ConstantMean()
-
-        # # Latent noise as a trainable parameter over inducing points
-        # latent_noise_init = torch.ones(inducing_points.size(0)) * 1e-2
-        # self.latent_noise = torch.nn.Parameter(latent_noise_init)
-        
-
-
-        # if add_noise == 'add':
-        #     self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel()+ gpytorch.kernels.WhiteNoiseKernel(noise=0.1))
-        # elif add_noise == 'noadd':
-        #     self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-        # else:
-        #     raise ValueError('add_noise must be either add or noadd')
         
         if kernel_type == 'RBF':
             self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-        elif kernel_type == 'Cosine':
-            self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.CosineKernel())
-        elif kernel_type == 'Linear':
-            self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.LinearKernel())
-        elif kernel_type == 'RBF_Linear':
-            self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel() + gpytorch.kernels.LinearKernel())
-
+       
         else:
-            raise ValueError('kernel_type must be either RBF or Cosine or Linear')
+            raise ValueError('Invalid kernel type. Supported type is: RBF')
 
-        # print("output_scale",self.covar_module.outputscale)
-        # print("raw_output_scale",self.covar_module.raw_outputscale)
-        # print("lengthscale",self.covar_module.base_kernel.lengthscale)
-        # print("raw_lengthscale",self.covar_module.base_kernel.raw_lengthscale)
-        # print("\n")
         
         if hyperparameter_fixed == 'fixed' and kernel_type == 'RBF':
             print('Hyperparameters fixed')
@@ -325,35 +258,12 @@ class GPClassificationModel(gpytorch.models.ApproximateGP):
             self.covar_module.base_kernel.kernels[1].variance = 2.0
             self.covar_module.base_kernel.kernels[1].raw_variance.requires_grad = False
 
-        # if hyperparameter_fixed == 'fixed' and add_observation_noise == 'homoscedasticity':
-        #     print('Hyperparameters fixed')
-
-            # Fix kernel hyperparameters
-            # self.raw_noise = torch.nn.Parameter(0.1 * torch.ones(1, 1), requires_grad=True)
-            # self.register_constraint("raw_noise", gpytorch.constraints.Positive())
-
-    # @property
-    # def noise(self):
-    #     return self.raw_noise_constraint.transform(self.raw_noise)
-
+        
 
     def forward(self, x):
 
         mean_x = self.mean_module(x)
-        
-        # if self.noise_observation == 'homoscedasticity':
-        #     # add a constant term to the covariance and ensure that the noise term is positive
-        #     covar_x = self.covar_module(x).add_diag(self.noise)
-        # elif self.noise_observation == 'noadd':
-        #     covar_x = self.covar_module(x)
-        # elif self.noise_observation == 'hetroscedasticity':
-        #     print('ToDo')
         covar_x = self.covar_module(x)
-
-
-        # latent_noise_diag = gpytorch.lazify(torch.diag(self.latent_noise))
-        # covar_x = covar_x + latent_noise_diag
-
         latent_pred = gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
         return latent_pred
 

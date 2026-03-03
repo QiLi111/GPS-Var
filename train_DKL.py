@@ -53,7 +53,7 @@ def train_DKL(model, likelihood, device,args,train_loader,val_loader,writer):
 
     for epoch in range(epoch_min, epoch_max):
         with gpytorch.settings.use_toeplitz(False):
-            metrics_train, hyperpara_train = train(model,likelihood,train_loader,optimizer,mll_train,device,args.trained_Unet, args.loss_type, criterion,args.addnoise,args.loss_add_mu_reg)
+            metrics_train, hyperpara_train = train(model,likelihood,train_loader,optimizer,mll_train,device,args.trained_Unet, args.loss_type, criterion,args.addnoise,args.loss_add_mu_reg,args.num_annotators)
             
             if epoch in range(epoch_min, epoch_max, args.FREQ_VISULISE):
                 with torch.no_grad():
@@ -62,20 +62,18 @@ def train_DKL(model, likelihood, device,args,train_loader,val_loader,writer):
                 add_scalars_hyperpara_GP(epoch,writer,hyperpara_train,hyperpara_val,args)
                 best_dice = save_best_model_GP(model,likelihood,epoch, metrics_val['dice'], best_dice, os.path.join(args.saved_name,args.saved_path))
 
+
             else:
                 add_scalars_metrics(epoch,writer,metrics_train,None)
                 add_scalars_hyperpara_GP(epoch,writer,hyperpara_train,None,args)
 
         save_regular_model_GP(model,likelihood,epoch, args.num_epochs, args.FREQ_SAVE,os.path.join(args.saved_name,args.saved_path))
         lr_sched.step()
-        # state_dict = model.state_dict()
-        # likelihood_state_dict = likelihood.state_dict()
-        # torch.save({'model': state_dict, 'likelihood': likelihood_state_dict}, 'dkl_cifar_checkpoint.dat')
     
     
 
 
-def train(model,likelihood,train_loader,optimizer,mll,device,trained_Unet, loss_type, criterion,add_noise,loss_add_mu_reg):
+def train(model,likelihood,train_loader,optimizer,mll,device,trained_Unet, loss_type, criterion,add_noise,loss_add_mu_reg,num_annotators):
     model.train()
     if trained_Unet == 'notrainU':
         model.feature_extractor.eval()
@@ -84,17 +82,17 @@ def train(model,likelihood,train_loader,optimizer,mll,device,trained_Unet, loss_
     noise_epoch, lengthscale_epoch, outputscale_epoch = [],[],[]
     noise_epoch0, noise_epoch1, noise_epoch2 = [],[],[]
     mu_epoch0, mu_epoch1, mu_epoch2 = [],[],[]
+    noise_epochs = [[] for _ in range(num_annotators)]
+    mu_epochs    = [[] for _ in range(num_annotators)]
 
     for ii, (image, mask_all, mask_wo_noise, selected_observation) in enumerate(train_loader):
         images, masks, mask_wo_noise = image.float().to(device), mask_all.float().to(device), mask_wo_noise.float().to(device)
         optimizer.zero_grad(set_to_none=True)
         # get GP’s latent posterior predictions. These will be MultivariateNormal distributions
-        # data_input = {'data':images[:,None,...],'mode':'train'}
-        # output = model(data_input)
         output = model(images[:,None,...])
         # transform these outputs to classification probabilities using likelihood.
         # add noise to account for the noise in observations
-        cls_probs = likelihood(output,add_noise,selected_observation).mean
+        cls_probs = likelihood(output,add_noise,selected_observation,num_annotators,images.shape[0]).mean
         # print('train',likelihood.noise)
 
         if loss_type == 'likelihood':
@@ -108,6 +106,12 @@ def train(model,likelihood,train_loader,optimizer,mll,device,trained_Unet, loss_
             soft_dice = compute_dice(cls_probs.reshape(masks.shape[0],masks.shape[1],masks.shape[2]), masks)
             BCE = criterion(cls_probs.reshape(masks.shape[0],masks.shape[1],masks.shape[2]), masks)
             loss = BCE + (1-soft_dice.mean())
+            
+        elif loss_type == 'dice_BCE_kl':
+            soft_dice = compute_dice(cls_probs.reshape(masks.shape[0],masks.shape[1],masks.shape[2]), masks)
+            BCE = criterion(cls_probs.reshape(masks.shape[0],masks.shape[1],masks.shape[2]), masks)
+            kl = model.gp_layer.variational_strategy.kl_divergence()
+            loss = BCE + (1-soft_dice.mean())+kl/len(train_loader.dataset)
         elif loss_type == 'dice_BCE_likelihood':
             soft_dice = compute_dice(cls_probs.reshape(masks.shape[0],masks.shape[1],masks.shape[2]), masks)
             BCE = criterion(cls_probs.reshape(masks.shape[0],masks.shape[1],masks.shape[2]), masks)
@@ -133,38 +137,22 @@ def train(model,likelihood,train_loader,optimizer,mll,device,trained_Unet, loss_
         if loss_add_mu_reg == 'add' and add_noise == 'add3sigmas3mus':
             loss = loss + torch.sum(likelihood.noise[3:]**2)
         elif loss_add_mu_reg == 'sum_2' and add_noise == 'add3sigmas3mus':
-            loss = loss + torch.sum(likelihood.noise[3:])**2
+            loss = loss + torch.sum(likelihood.noise[num_annotators:])**2
 
 
         loss.backward()
-        # print(loss.item())
         optimizer.step()
-
-        # # # print hyperparameters
-        # print("output_scale",model.gp_layer.covar_module.outputscale)
-        # print("raw_output_scale",model.gp_layer.covar_module.raw_outputscale)
-        # print("lengthscale",model.gp_layer.covar_module.base_kernel.lengthscale)
-        # print("raw_lengthscale",model.gp_layer.covar_module.base_kernel.raw_lengthscale)
-        # print('noise',likelihood.noise)
-        # print("\n")
 
 
         with torch.no_grad():
             
             # calculate NLL
             nll = BinarySegmentationNLLMetric(cls_probs.reshape(masks.shape[0],masks.shape[1],masks.shape[2]), masks)
-            # print('Test NLL: {}'.format(-preds.to_data_independent_dist().log_prob(test_y).mean().item()))
             # calculate ECE
             # for each image, calculate the ECE, and then obtain the mean ECE across all images
             cls_probs_reshape = cls_probs.reshape(masks.shape[0],masks.shape[1],masks.shape[2])
             for _i in range(masks.shape[0]):
                 ece.append(binary_calibration_error(cls_probs_reshape[_i,...], masks[_i,...].int(), n_bins=15, norm='l1').item())
-
-            # # # other method for calculating ECE
-            # confidence = cls_probs.clone()
-            # t = 0.5 # threshold; when the probability is very close to 0.5, the results may be different with above due to numerical precision
-            # confidence[cls_probs < t] = 1 - confidence[cls_probs < t]
-            # compute_calibration(masks.flatten().detach().cpu().numpy(),cls_probs.ge(t).float().detach().cpu().numpy(),confidence.detach().cpu().numpy(),  num_bins=15)
 
             
             # calculate Dice score
@@ -189,13 +177,16 @@ def train(model,likelihood,train_loader,optimizer,mll,device,trained_Unet, loss_
                 noise_epoch0.append(likelihood.noise[0].item())
                 noise_epoch1.append(likelihood.noise[1].item())
                 noise_epoch2.append(likelihood.noise[2].item())
-            elif add_noise == 'add3sigmas3mus':
-                noise_epoch0.append(likelihood.noise[0].item())
-                noise_epoch1.append(likelihood.noise[1].item())
-                noise_epoch2.append(likelihood.noise[2].item())
-                mu_epoch0.append(likelihood.noise[3].item())
-                mu_epoch1.append(likelihood.noise[4].item())
-                mu_epoch2.append(likelihood.noise[5].item())
+            elif add_noise == 'add3sigmas3mus':          
+
+                for i_anno in range(num_annotators):
+                    noise_epochs[i_anno].append(likelihood.noise[i_anno].item())
+                    mu_epochs[i_anno].append(likelihood.noise[num_annotators+i_anno].item())
+
+                
+
+
+
 
 
     dice_epoch_non_empty = sum([dice_epoch[i] for i in range(len(dice_epoch)) if index_non_empty[i] == 1]) / sum(index_non_empty)
@@ -217,13 +208,21 @@ def train(model,likelihood,train_loader,optimizer,mll,device,trained_Unet, loss_
         noise_epoch2 = sum(noise_epoch2)/len(noise_epoch2)
         noise_epoch = [noise_epoch0, noise_epoch1, noise_epoch2]
     elif add_noise == 'add3sigmas3mus':
-        noise_epoch0 = sum(noise_epoch0)/len(noise_epoch0)
-        noise_epoch1 = sum(noise_epoch1)/len(noise_epoch1)
-        noise_epoch2 = sum(noise_epoch2)/len(noise_epoch2)
-        mu_epoch0 = sum(mu_epoch0)/len(mu_epoch0)
-        mu_epoch1 = sum(mu_epoch1)/len(mu_epoch1)
-        mu_epoch2 = sum(mu_epoch2)/len(mu_epoch2)
-        noise_epoch = [noise_epoch0, noise_epoch1, noise_epoch2, mu_epoch0, mu_epoch1, mu_epoch2]
+
+        noise_mean = [
+            sum(epoch_vals) / len(epoch_vals)
+            for epoch_vals in noise_epochs
+        ]
+
+        mu_mean = [
+            sum(epoch_vals) / len(epoch_vals)
+            for epoch_vals in mu_epochs
+        ]
+
+        noise_epoch = noise_mean + mu_mean
+
+
+
     elif add_noise == 'noadd':
         noise_epoch = None
     else:
@@ -242,17 +241,18 @@ def val(model,likelihood,val_loader,mll,device,epoch,args, criterion):
     noise_epoch, lengthscale_epoch, outputscale_epoch = [],[],[]
     noise_epoch0, noise_epoch1, noise_epoch2 = [],[],[]
     mu_epoch0, mu_epoch1, mu_epoch2 = [],[],[]
+    noise_epochs = [[] for _ in range(args.num_annotators)]
+    mu_epochs    = [[] for _ in range(args.num_annotators)]
 
     with torch.no_grad():
 
         for ii, (image_val, mask_all_val, mask_wo_noise_val,selected_observation) in enumerate(val_loader):
             images_val, masks_val, mask_wo_noise_val = image_val.float().to(device), mask_all_val.float().to(device), mask_wo_noise_val.float().to(device)
-            
-            if args.labels  == 'random3' or args.labels == 'random4':
-                # use noiseless mask for validation
-                masks_val = mask_wo_noise_val
-            
+            masks_val = mask_wo_noise_val[:,-1,:,:]
+
             preds_val = model(images_val[:,None,...])
+
+
             # get prediction with/without noise
             output = likelihood(preds_val,args.addnoise_pred)   # Get classification predictions
             binary_output = output.mean.ge(0.5).float() # Transform these probabilities to be 0/1 labels
@@ -260,13 +260,6 @@ def val(model,likelihood,val_loader,mll,device,epoch,args, criterion):
             cls_probs = output.mean
             cls_probs_reshape = cls_probs.reshape(masks_val.shape[0],masks_val.shape[1],masks_val.shape[2])
 
-            # # # print hyperparameters
-            # print("output_scale",model.gp_layer.covar_module.outputscale)
-            # print("raw_output_scale",model.gp_layer.covar_module.raw_outputscale)
-            # print("lengthscale",model.gp_layer.covar_module.base_kernel.lengthscale)
-            # print("raw_lengthscale",model.gp_layer.covar_module.base_kernel.raw_lengthscale)
-            # print('noise',likelihood.noise)
-            # print("\n")
 
             if args.loss_type == 'likelihood':
                 loss =  -mll(preds_val, masks_val.view(-1))
@@ -279,6 +272,13 @@ def val(model,likelihood,val_loader,mll,device,epoch,args, criterion):
                 soft_dice = compute_dice(cls_probs_reshape, masks_val.long())
                 BCE = criterion(cls_probs_reshape, masks_val)
                 loss = BCE + (1-soft_dice.mean())
+
+            elif args.loss_type == 'dice_BCE_kl':
+                soft_dice = compute_dice(cls_probs_reshape, masks_val.long())
+                BCE = criterion(cls_probs_reshape, masks_val)
+                kl = model.gp_layer.variational_strategy.kl_divergence()
+                loss = BCE + (1-soft_dice.mean())+kl/len(val_loader.dataset)
+                
             elif args.loss_type == 'dice_BCE_likelihood':
                 soft_dice = compute_dice(cls_probs_reshape, masks_val.long())
                 BCE = criterion(cls_probs_reshape, masks_val)
@@ -290,7 +290,7 @@ def val(model,likelihood,val_loader,mll,device,epoch,args, criterion):
                 loss = loss + torch.sum(likelihood.noise[3:]**2)
             
             elif args.loss_add_mu_reg == 'sum_2' and args.addnoise == 'add3sigmas3mus':
-                loss = loss + torch.sum(likelihood.noise[3:])**2
+                loss = loss + torch.sum(likelihood.noise[args.num_annotators:])**2
 
 
             nll = BinarySegmentationNLLMetric(cls_probs_reshape, masks_val)
@@ -300,6 +300,23 @@ def val(model,likelihood,val_loader,mll,device,epoch,args, criterion):
 
 
             hard_dice = compute_dice(binary_output.reshape(masks_val.shape[0],masks_val.shape[1],masks_val.shape[2]), masks_val.long())
+            
+            if args.labels == 'random4' and args.labels_infer == 'seg_1_2_3_HQ':
+                output_0 = likelihood(preds_val,args.addnoise,[0]*image_val.shape[0],args.num_annotators,images_val.shape[0])
+                binary_output_0 = output_0.mean.ge(0.5).float() # Transform these probabilities to be 0/1 labels
+                hard_dice_0 = compute_dice(binary_output_0.reshape(masks_val.shape[0],masks_val.shape[1],masks_val.shape[2]), mask_wo_noise_val[:,0,...].long())
+
+                output_1 = likelihood(preds_val,args.addnoise,[1]*image_val.shape[0],args.num_annotators,images_val.shape[0])
+                binary_output_1 = output_1.mean.ge(0.5).float() # Transform these probabilities to be 0/1 labels
+                hard_dice_1 = compute_dice(binary_output_1.reshape(masks_val.shape[0],masks_val.shape[1],masks_val.shape[2]), mask_wo_noise_val[:,1,...].long())
+
+                output_2 = likelihood(preds_val,args.addnoise,[2]*image_val.shape[0],args.num_annotators,images_val.shape[0])
+                binary_output_2 = output_2.mean.ge(0.5).float() # Transform these probabilities to be 0/1 labels
+                hard_dice_2 = compute_dice(binary_output_2.reshape(masks_val.shape[0],masks_val.shape[1],masks_val.shape[2]), mask_wo_noise_val[:,2,...].long())
+
+                hard_dice = (hard_dice + hard_dice_0 + hard_dice_1 + hard_dice_2)/4
+
+
             # calculate IoU
             hard_iou = compute_iou(binary_output.reshape(masks_val.shape[0],masks_val.shape[1],masks_val.shape[2]), masks_val.long())
             
@@ -324,12 +341,10 @@ def val(model,likelihood,val_loader,mll,device,epoch,args, criterion):
                 noise_epoch1.append(likelihood.noise[1].item())
                 noise_epoch2.append(likelihood.noise[2].item())
             elif args.addnoise == 'add3sigmas3mus':
-                noise_epoch0.append(likelihood.noise[0].item())
-                noise_epoch1.append(likelihood.noise[1].item())
-                noise_epoch2.append(likelihood.noise[2].item())
-                mu_epoch0.append(likelihood.noise[3].item())
-                mu_epoch1.append(likelihood.noise[4].item())
-                mu_epoch2.append(likelihood.noise[5].item())
+                       
+                for i_anno in range(args.num_annotators):
+                    noise_epochs[i_anno].append(likelihood.noise[i_anno].item())
+                    mu_epochs[i_anno].append(likelihood.noise[args.num_annotators+i_anno].item())
 
             visualize(images_val, masks_val, binary_output.reshape(masks_val.shape[0],masks_val.shape[1],masks_val.shape[2]),epoch,ii,args)
 
@@ -353,13 +368,19 @@ def val(model,likelihood,val_loader,mll,device,epoch,args, criterion):
         noise_epoch2 = sum(noise_epoch2)/len(noise_epoch2)
         noise_epoch = [noise_epoch0, noise_epoch1, noise_epoch2]
     elif args.addnoise == 'add3sigmas3mus':
-        noise_epoch0 = sum(noise_epoch0)/len(noise_epoch0)
-        noise_epoch1 = sum(noise_epoch1)/len(noise_epoch1)
-        noise_epoch2 = sum(noise_epoch2)/len(noise_epoch2)
-        mu_epoch0 = sum(mu_epoch0)/len(mu_epoch0)
-        mu_epoch1 = sum(mu_epoch1)/len(mu_epoch1)
-        mu_epoch2 = sum(mu_epoch2)/len(mu_epoch2)
-        noise_epoch = [noise_epoch0, noise_epoch1, noise_epoch2, mu_epoch0, mu_epoch1, mu_epoch2]
+        
+        noise_mean = [
+            sum(epoch_vals) / len(epoch_vals)
+            for epoch_vals in noise_epochs
+        ]
+
+        mu_mean = [
+            sum(epoch_vals) / len(epoch_vals)
+            for epoch_vals in mu_epochs
+        ]
+
+        noise_epoch = noise_mean + mu_mean
+
     elif args.addnoise == 'noadd':
         noise_epoch = None
     else:

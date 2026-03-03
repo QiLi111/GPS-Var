@@ -1,0 +1,9 @@
+*.log
+.idea/
+.vscode/
+__pycache__/
+.DS_Store
+sh/
+*.png
+*.nii.gz
+*.zip

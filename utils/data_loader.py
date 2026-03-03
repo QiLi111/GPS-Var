@@ -11,7 +11,7 @@ from utils.transforms import z_score, Flip, Affine
 
 
 class DataSet(Dataset):
-    def __init__(self, datapath,num_class,labels,labels_inference,data_aug,img_list = None,train_val = None,simulated_model = None,sigma = None,mu = None):
+    def __init__(self, datapath,num_class,labels,labels_inference,data_aug,img_list = None,train_val = None,simulated_model = None,sigma = None,mu = None,seg_path_simulated_ind = None):
         self.datapath = datapath
         self.img_list = img_list
         self.num_class = num_class
@@ -19,6 +19,7 @@ class DataSet(Dataset):
         self.labels_inference = labels_inference
         self.data_aug = data_aug
         self.simulated_model = simulated_model
+        self.seg_path_simulated_ind = seg_path_simulated_ind
         self.sigma = sigma
         self.mu = mu
 
@@ -43,8 +44,8 @@ class DataSet(Dataset):
         # path of simulated labels
         if self.simulated_model:
             self.seg_path_simulated = os.path.join(self.datapath,'data_simulation', self.simulated_model,"sigma_"+'%.04f'%self.sigma+"_mu_"+'%.04f'%self.mu)
-
-        # self.seg_path_simulated_ind = os.path.join(self.datapath,'data_simulation_ind',"bias_"+'%.04f'%self.mu+"_variance_"+'%.04f'%self.sigma)
+        if self.seg_path_simulated_ind:
+            self.seg_path_simulated_ind = os.path.join(self.datapath,'data_simulation_ind',"bias_"+'%.04f'%self.mu+"_variance_"+'%.04f'%self.sigma)
         
     def split_data(self,split_ratio=[3,1,1]):
         # randon split data, and save the name of each case into a file, saved in json format
@@ -284,16 +285,39 @@ class DataSet(Dataset):
         itk_image = sitk.ReadImage(image_name)
         image = sitk.GetArrayFromImage(itk_image)[int(re.findall(r'\d+', self.img_list[idx])[1])]
             
+        # get high quality label
+
+        mask_name_HQ = os.path.join(self.seg_path_GT,'label_'+self.img_list[idx][2:33])
+        itk_mask_HQ = sitk.ReadImage(mask_name_HQ)
+        mask_high_quality = sitk.GetArrayFromImage(itk_mask_HQ)[int(re.findall(r'\d+', self.img_list[idx])[1])]
+
+
         if self.labels_inference == 'voted_only':
             mask_name_vote = os.path.join(self.seg_path_voted,'label_'+self.img_list[idx][2:33])
             itk_mask_vote = sitk.ReadImage(mask_name_vote)
             mask_vote = sitk.GetArrayFromImage(itk_mask_vote)[int(re.findall(r'\d+', self.img_list[idx])[1])]
 
-        elif self.labels_inference == 'high_quality':
-            mask_name_vote = os.path.join(self.seg_path_GT,'label_'+self.img_list[idx][2:33])
-            itk_mask_vote = sitk.ReadImage(mask_name_vote)
-            mask_vote = sitk.GetArrayFromImage(itk_mask_vote)[int(re.findall(r'\d+', self.img_list[idx])[1])]
+        elif self.labels_inference == 'seg_1_2_3_HQ':
 
+            mask_name1 = os.path.join(self.seg_path1,'label_'+self.img_list[idx][2:33])
+            itk_mask1 = sitk.ReadImage(mask_name1)
+            mask1 = sitk.GetArrayFromImage(itk_mask1)[int(re.findall(r'\d+', self.img_list[idx])[1])]
+
+            mask_name2 = os.path.join(self.seg_path2,'label_'+self.img_list[idx][2:33])
+            itk_mask2 = sitk.ReadImage(mask_name2)
+            mask2 = sitk.GetArrayFromImage(itk_mask2)[int(re.findall(r'\d+', self.img_list[idx])[1])]
+
+            mask_name3 = os.path.join(self.seg_path3,'label_'+self.img_list[idx][2:33])
+            itk_mask3 = sitk.ReadImage(mask_name3)
+            mask3 = sitk.GetArrayFromImage(itk_mask3)[int(re.findall(r'\d+', self.img_list[idx])[1])]
+
+            mask_vote = np.stack([mask1,mask2,mask3,mask_high_quality],axis=0)
+            # mask_decomp = self._label_decomp(mask_all, num_cls=self.num_class)
+
+
+        elif self.labels_inference == 'high_quality':
+            mask_vote = mask_high_quality
+            
 
         if self.labels == 'all':
             # get all labels: seg1, seg2, seg3, seg_vote
@@ -333,14 +357,19 @@ class DataSet(Dataset):
             itk_mask1 = sitk.ReadImage(mask_name1)
             mask_all = sitk.GetArrayFromImage(itk_mask1)[int(re.findall(r'\d+', self.img_list[idx])[1])]
         
-        # elif self.labels == 'random4':
-        #     # random select from four avaliable labels
-        #     selected_observation = np.random.randint(4)
-        #     selected_folder = self.observation_labels_4[selected_observation]
+        elif self.labels == 'random4':
+            # random select from four avaliable labels: seg1, seg2, seg3, seg_HQ
+            selected_observation = np.random.randint(4)
+            selected_folder = self.observation_labels_4[selected_observation]
 
-        #     mask_name1 = os.path.join(selected_folder,'label_'+self.img_list[idx][2:33])
-        #     itk_mask1 = sitk.ReadImage(mask_name1)
-        #     mask_all = sitk.GetArrayFromImage(itk_mask1)[int(re.findall(r'\d+', self.img_list[idx])[1])]
+            if selected_folder == self.seg_path_GT:
+                
+                mask_all = mask_high_quality
+                
+            else:
+                mask_name1 = os.path.join(selected_folder,'label_'+self.img_list[idx][2:33])
+                itk_mask1 = sitk.ReadImage(mask_name1)
+                mask_all = sitk.GetArrayFromImage(itk_mask1)[int(re.findall(r'\d+', self.img_list[idx])[1])]
 
         elif self.labels == 'inference':
 
@@ -358,11 +387,11 @@ class DataSet(Dataset):
             itk_mask3 = sitk.ReadImage(mask_name3)
             mask3 = sitk.GetArrayFromImage(itk_mask3)[int(re.findall(r'\d+', self.img_list[idx])[1])]
 
-            if mask_vote.shape[0] != mask1.shape[0] or mask_vote.shape[1] != mask1.shape[1]:
-                print(mask_vote.shape,mask1.shape)
-                raise('voted label is not the same size')
+            # if mask_vote.shape[0] != mask1.shape[0] or mask_vote.shape[1] != mask1.shape[1]:
+            #     print(mask_vote.shape,mask1.shape)
+            #     raise('voted label is not the same size')
             
-            mask_all = np.stack([mask1,mask2,mask3],axis=0)
+            mask_all = np.stack([mask1,mask2,mask3,mask_high_quality],axis=0)
             selected_observation = -1
 
         elif self.labels == 'seg1':
@@ -388,6 +417,18 @@ class DataSet(Dataset):
             mask3 = sitk.GetArrayFromImage(itk_mask3)[int(re.findall(r'\d+', self.img_list[idx])[1])]
 
             mask_all = mask3
+            selected_observation = -1
+
+        elif self.labels == 'voted_only':
+            mask_name_vote = os.path.join(self.seg_path_voted,'label_'+self.img_list[idx][2:33])
+            itk_mask_vote = sitk.ReadImage(mask_name_vote)
+            mask_vote = np.transpose(sitk.GetArrayFromImage(itk_mask_vote),(2,1,0))[int(re.findall(r'\d+', self.img_list[idx])[1])]
+
+            mask_all = mask_vote
+            selected_observation = -1
+            
+        elif self.labels == 'high_quality':
+            mask_all = mask_high_quality
             selected_observation = -1
 
         elif self.labels == 'seg_simulated':
@@ -426,6 +467,8 @@ class DataSet(Dataset):
 
                 else:
                     image = _transform(image)
+        
+        # print(idx, image.shape, mask_all.shape, mask_vote.shape, selected_observation)
 
             
         return image, mask_all, mask_vote,selected_observation # image; labels with noise; labels without noise; which observation #, mask_decomp

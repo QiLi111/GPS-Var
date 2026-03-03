@@ -10,6 +10,9 @@ from torchmetrics.functional.classification import binary_calibration_error
 import shutil
 from monai.metrics import compute_hausdorff_distance
 import gc
+from datetime import datetime
+import matplotlib.colors as mcolors
+from skimage import measure
 
 def seed_all(seed):
     random.seed(seed)
@@ -127,12 +130,29 @@ def add_scalars_hyperpara_GP(epoch,writer,hyperpara_train,hyperpara_val,args):
         writer.add_scalars('GP_parameters', {'noise1_train': hyperpara_train['noise'][1]}, epoch)
         writer.add_scalars('GP_parameters', {'noise2_train': hyperpara_train['noise'][2]}, epoch)
     elif args.addnoise == 'add3sigmas3mus':
-        writer.add_scalars('GP_parameters', {'noise0_train': hyperpara_train['noise'][0]}, epoch)
-        writer.add_scalars('GP_parameters', {'noise1_train': hyperpara_train['noise'][1]}, epoch)
-        writer.add_scalars('GP_parameters', {'noise2_train': hyperpara_train['noise'][2]}, epoch)
-        writer.add_scalars('GP_parameters', {'mu0_train': hyperpara_train['noise'][3]}, epoch)
-        writer.add_scalars('GP_parameters', {'mu1_train': hyperpara_train['noise'][4]}, epoch)
-        writer.add_scalars('GP_parameters', {'mu2_train': hyperpara_train['noise'][5]}, epoch)
+        # writer.add_scalars('GP_parameters', {'noise0_train': hyperpara_train['noise'][0]}, epoch)
+        # writer.add_scalars('GP_parameters', {'noise1_train': hyperpara_train['noise'][1]}, epoch)
+        # writer.add_scalars('GP_parameters', {'noise2_train': hyperpara_train['noise'][2]}, epoch)
+        # writer.add_scalars('GP_parameters', {'mu0_train': hyperpara_train['noise'][3]}, epoch)
+        # writer.add_scalars('GP_parameters', {'mu1_train': hyperpara_train['noise'][4]}, epoch)
+        # writer.add_scalars('GP_parameters', {'mu2_train': hyperpara_train['noise'][5]}, epoch)
+
+        num_ann = args.num_annotators
+        noise_vals = hyperpara_train['noise']
+
+        log_dict = {}
+
+        for i in range(num_ann):
+            log_dict[f'noise{i}_train'] = noise_vals[i]
+
+        for i in range(num_ann):
+            log_dict[f'mu{i}_train'] = noise_vals[num_ann + i]
+
+        writer.add_scalars('GP_parameters', log_dict, epoch)
+
+
+
+
     elif args.addnoise == 'add_1_bias_variance':
         writer.add_scalars('GP_parameters', {'noise0_train': hyperpara_train['noise'][0]}, epoch)
         writer.add_scalars('GP_parameters', {'mu0_train': hyperpara_train['noise'][1]}, epoch)
@@ -148,12 +168,26 @@ def add_scalars_hyperpara_GP(epoch,writer,hyperpara_train,hyperpara_val,args):
             writer.add_scalars('GP_parameters', {'noise1_val': hyperpara_val['noise'][1]}, epoch)
             writer.add_scalars('GP_parameters', {'noise2_val': hyperpara_val['noise'][2]}, epoch)
         elif args.addnoise == 'add3sigmas3mus':
-            writer.add_scalars('GP_parameters', {'noise0_val': hyperpara_val['noise'][0]}, epoch)
-            writer.add_scalars('GP_parameters', {'noise1_val': hyperpara_val['noise'][1]}, epoch)
-            writer.add_scalars('GP_parameters', {'noise2_val': hyperpara_val['noise'][2]}, epoch)
-            writer.add_scalars('GP_parameters', {'mu0_val': hyperpara_val['noise'][3]}, epoch)
-            writer.add_scalars('GP_parameters', {'mu1_val': hyperpara_val['noise'][4]}, epoch)
-            writer.add_scalars('GP_parameters', {'mu2_val': hyperpara_val['noise'][5]}, epoch)
+            # writer.add_scalars('GP_parameters', {'noise0_val': hyperpara_val['noise'][0]}, epoch)
+            # writer.add_scalars('GP_parameters', {'noise1_val': hyperpara_val['noise'][1]}, epoch)
+            # writer.add_scalars('GP_parameters', {'noise2_val': hyperpara_val['noise'][2]}, epoch)
+            # writer.add_scalars('GP_parameters', {'mu0_val': hyperpara_val['noise'][3]}, epoch)
+            # writer.add_scalars('GP_parameters', {'mu1_val': hyperpara_val['noise'][4]}, epoch)
+            # writer.add_scalars('GP_parameters', {'mu2_val': hyperpara_val['noise'][5]}, epoch)
+
+            noise_vals = hyperpara_val['noise']
+
+            log_dict = {}
+
+            for i in range(num_ann):
+                log_dict[f'noise{i}_val'] = noise_vals[i]
+
+            for i in range(num_ann):
+                log_dict[f'mu{i}_val'] = noise_vals[num_ann + i]
+
+            writer.add_scalars('GP_parameters', log_dict, epoch)
+
+
         elif args.addnoise == 'add_1_bias_variance':
             writer.add_scalars('GP_parameters', {'noise0_val': hyperpara_val['noise'][0]}, epoch)
             writer.add_scalars('GP_parameters', {'mu0_val': hyperpara_val['noise'][1]}, epoch)
@@ -474,6 +508,19 @@ def load_model(model,likelihood,args,device,epoch):
 
     return model,likelihood
 
+def load_last_model(model,likelihood,args,device,folder):
+    list_dir = os.listdir(os.path.join(args.saved_name,args.saved_path, 'saved_model'))
+
+    saved_models = [i for i in list_dir if i.startswith('model_epoch')]
+    saved_likelihood = [i for i in list_dir if i.startswith('likelihood_epoch')]
+    
+    epoch = int(re.findall(r'\d+', saved_models[0])[0])
+    
+
+    model.load_state_dict(torch.load(os.path.join(args.saved_name,args.saved_path,'saved_model', saved_models[0]),map_location=torch.device(device)))
+    likelihood.load_state_dict(torch.load(os.path.join(args.saved_name,args.saved_path,'saved_model', saved_likelihood[0]),map_location=torch.device(device)))
+
+    return model,likelihood,saved_models[0],saved_likelihood[0],epoch
 
 def load_best_model_and_epoch(model,likelihood,args,device,folder):
     try:
@@ -536,39 +583,26 @@ def load_best_model_and_epoch_unet(model,args,device,folder):
     
 def get_saved_folder_name(args):
 
-    if args.load_pretrained_Unet == "load" and args.trained_Unet == "trainU":
-        A = "PreLoad_TrainUnet_"
-    elif args.load_pretrained_Unet == "load" and args.trained_Unet == "notrainU":
-        A = "PreLoad_NoTrainUnet_"
-    elif args.load_pretrained_Unet == "noload" and args.trained_Unet == "trainU":
-        A = "NoPreLoad_TrainUnet_"
-    elif args.load_pretrained_Unet == "noload" and args.trained_Unet == "notrainU":
-        A = "NoPreLoad_NoTrainUnet_"
+    
+    
 
-    if args.hyperparameter == "fixed": 
-        A = A + "FixedHyper_"
-    elif args.hyperparameter == "optimize":
-        A = A + "OptimizeHyper_"
+    
 
     if args.addnoise == "add":
-        A = A + "AddNoise_"
+        A = "AddNoise_"
     elif args.addnoise == "noadd":
-        A = A + "NoAddNoise_"
+        A = "NoAddNoise_"
     elif args.addnoise == "add3sigmas":
-        A = A + "Add3Sigmas_"
+        A = "Add3Sigmas_"
     elif args.addnoise == "add3sigmas3mus":
-        A = A + "Add3Sigmas3Mus_"
+        A = "Add3Sigmas3Mus_"
     
     if args.addnoise_pred == 'add':
         A = A + "AddNoisePred_"
     elif args.addnoise_pred == 'noadd':
         A = A + "NoAddNoisePred_"
 
-    if args.FeatBatchNorm == "add":
-        A = A + "FeatBN_"
-    elif args.FeatBatchNorm == "noadd":
-        A = A + "NoFeatBN_"
-        
+    
     if args.loss_add_mu_reg == "add":
         A = A + "AddMuReg_"
     elif args.loss_add_mu_reg == "noadd":
@@ -578,15 +612,13 @@ def get_saved_folder_name(args):
     
 
     if args.retrain == "load":
-        args.saved_name = A + args.labels + '__' + args.labels_infer + '__' + args.loss_type  + '__' + args.nll_type + '__' + args.kernel_type + '__' +args.VariationalStrategy+'_'+str(args.InducingPtsType)+str(args.num_indu) + '__FeatDim'+str(args.feat_dim) + '__bst_'+str(args.batch_size_train)+'__bsv_'+str(args.batch_size_val)+'__fr_'+str(args.FREQ_SAVE)+'__RetrainEpoch_'+str(args.retrain_epoch) 
+        args.saved_name = A + args.labels + '__' + args.labels_infer + '__' + args.loss_type    +'__RetrainEpoch_'+str(args.retrain_epoch) 
     else:
-        args.saved_name = A + args.labels  + '__' + args.labels_infer + '__' + args.loss_type + '__' + args.nll_type + '__' + args.kernel_type + '__' +args.VariationalStrategy+'_'+str(args.InducingPtsType)+str(args.num_indu)+ '__FeatDim'+str(args.feat_dim) + '__bst_'+str(args.batch_size_train)+'__bsv_'+str(args.batch_size_val)+'__fr_'+str(args.FREQ_SAVE)
+        args.saved_name = A + args.labels  + '__' + args.labels_infer + '__' + args.loss_type 
     
     if args.data_aug == 'add':
         args.saved_name = args.saved_name + '__DA'
     
-
-
     return args
 
 
@@ -1012,6 +1044,7 @@ def get_args(path,folder):
     args['feat_dim'] = int(args['feat_dim'])
     args['seed'] = int(args['seed'])
     args['num_class'] = int(args['num_class'])
+    args.num_annotators = int(args.num_annotators)
     
 
     args_convert = argparse.Namespace(**args)
@@ -1166,24 +1199,33 @@ def save_metrics(csv_name,folder,metrics_all,hyperpara_all,metrics_addnoise_all,
             noiseless_metrics_written(f,metrics_all)
             if args.addnoise == 'add':
                 noise_metrics_written(f,hyperpara_all,metrics_addnoise_all)
-        elif args.pre_labels == 'random3':
-            f.write('Training: Using three labels from three observers \n')
+        elif args.pre_labels == 'random4':
+            
+            f.write('Training: Using three annotations and corrected label \n')
+            
             if args.labels_infer == 'voted_only':
-                f.write('Comparing with voted labels \n')
+                f.write('Val: Comparing with voted labels \n')
             elif args.labels_infer == 'high_quality':
-                f.write('Comparing with high quality label \n')
+                f.write('Val: Comparing with high quality label \n')
+            elif args.labels_infer == 'seg_1_2_3_HQ':
+                f.write('Val: Comparing with seg 1, seg 2, seg 3 and high quality label \n')
+
             Hyper_parameters_written(f,hyperpara_all['vote'],args,saved_model_name,saved_likelihood_name)
+            f.write('No noise, compare with high quality label \n')
             noiseless_metrics_written(f,metrics_all['vote'])
             if len(metrics_addnoise_all['vote']['dice'])>0:
                 noise_metrics_written(f,hyperpara_all['vote'],metrics_addnoise_all['vote'])
 
             if args.addnoise == 'add3sigmas' or args.addnoise == 'add3sigmas3mus':
-                f.write('Adding sigma0 and mu0 \n')
+                f.write('Adding sigma0 and mu0, and compare with high quality label \n')
                 noise_metrics_written(f,hyperpara_all['0_voted'],metrics_addnoise_all['0_voted'])
-                f.write('Adding sigma1 and mu1 \n')
+                f.write('Adding sigma1 and mu1, and compare with high quality label \n')
                 noise_metrics_written(f,hyperpara_all['1_voted'],metrics_addnoise_all['1_voted'])
-                f.write('Adding sigma2 and mu2 \n')
+                f.write('Adding sigma2 and mu2, and compare with high quality label \n')
                 noise_metrics_written(f,hyperpara_all['2_voted'],metrics_addnoise_all['2_voted'])
+
+
+           
 
             f.write('Comparing with seg 0 \n')
             Hyper_parameters_written(f,hyperpara_all['0'],args,saved_model_name,saved_likelihood_name)
@@ -1203,16 +1245,9 @@ def save_metrics(csv_name,folder,metrics_all,hyperpara_all,metrics_addnoise_all,
             if len(metrics_addnoise_all['2']['dice'])>0:
                 noise_metrics_written(f,hyperpara_all['2'],metrics_addnoise_all['2'])
 
-            f.write('Average results from three comparisions \n')
+            
 
-            hyperpara_all_three = {key:np.concatenate((hyperpara_all['0'][key],hyperpara_all['1'][key],hyperpara_all['2'][key]),axis=0) for key in hyperpara_all['0'].keys()}
-            metrics_all_three = {key:np.concatenate((metrics_all['0'][key],metrics_all['1'][key],metrics_all['2'][key]),axis=0) for key in metrics_all['0'].keys()}
-            metrics_addnoise_all_three = {key:np.concatenate((metrics_addnoise_all['0'][key],metrics_addnoise_all['1'][key],metrics_addnoise_all['2'][key]),axis=0) for key in metrics_addnoise_all['0'].keys()}
-
-            Hyper_parameters_written(f,hyperpara_all_three,args,saved_model_name,saved_likelihood_name)
-            noiseless_metrics_written(f,metrics_all_three)
-            if len(metrics_addnoise_all_three['dice'])>0:
-                noise_metrics_written(f,hyperpara_all_three,metrics_addnoise_all_three)
+            
 
         f.write('\n') 
             
@@ -1231,7 +1266,7 @@ def save_metrics_grid_sample(csv_name,folder,metrics_all,hyperpara_all,metrics_a
 
         if args.pre_labels == 'co':
             raise ValueError('Cannot use grid sample for co labels.')
-        elif args.pre_labels == 'random3':
+        elif args.pre_labels == 'random4':
             Hyper_parameters_written(f,hyperpara_all,args,saved_model_name,saved_likelihood_name)
             # noiseless_metrics_written(f,metrics_all)
             noise_metrics_written(f,hyperpara_all,metrics_addnoise_all)
@@ -1293,45 +1328,46 @@ def save_metrics_unet(csv_name,folder,metrics,saved_model_name,args):
 
         elif args.pre_labels == 'seg1':
             f.write('Training: Using seg0 labels \n')
-            if args.labels_infer == 'voted_only':
-                f.write('Comparing with voted labels \n')
-            elif args.labels_infer == 'high_quality':
-                f.write('Comparing with high quality label \n')
+            # if args.labels_infer == 'voted_only':
+            #     f.write('Comparing with voted labels \n')
+            # elif args.labels_infer == 'high_quality':
+            f.write('Comparing with high quality label \n')
             noiseless_metrics_written_unet(f,metrics['vote'])
             f.write('Comparing with seg 0 \n')
             noiseless_metrics_written_unet(f,metrics['0'])
 
         elif args.pre_labels == 'seg2':
             f.write('Training: Using seg1 labels \n')
-            if args.labels_infer == 'voted_only':
-                f.write('Comparing with voted labels \n')
-            elif args.labels_infer == 'high_quality':
-                f.write('Comparing with high quality label \n')
+            # if args.labels_infer == 'voted_only':
+            #     f.write('Comparing with voted labels \n')
+            # elif args.labels_infer == 'high_quality':
+            f.write('Comparing with high quality label \n')
             noiseless_metrics_written_unet(f,metrics['vote'])
 
             f.write('Comparing with seg 1 \n')
             noiseless_metrics_written_unet(f,metrics['1'])
-            f.write('Comparing with seg 0 \n')
-            noiseless_metrics_written_unet(f,metrics['0'])
+            # f.write('Comparing with seg 0 \n')
+            # noiseless_metrics_written_unet(f,metrics['0'])
 
         elif args.pre_labels == 'seg3':
             f.write('Training: Using seg2 labels \n')
-            if args.labels_infer == 'voted_only':
-                f.write('Comparing with voted labels \n')
-            elif args.labels_infer == 'high_quality':
-                f.write('Comparing with high quality label \n')
+            # if args.labels_infer == 'voted_only':
+            #     f.write('Comparing with voted labels \n')
+            # elif args.labels_infer == 'high_quality':
+            f.write('Comparing with high quality label \n')
             noiseless_metrics_written_unet(f,metrics['vote'])
 
             f.write('Comparing with seg 2 \n')
             noiseless_metrics_written_unet(f,metrics['2'])
 
-        elif args.pre_labels == 'seg_simulated':
-            f.write('Training: Using simulated labels: sigma%4f, mu%4f \n'%(float(args.sigma_simulated_label),float(args.mu_simulated_label)))
-            if args.labels_infer == 'voted_only':
-                f.write('Comparing with voted labels \n')
-            elif args.labels_infer == 'high_quality':
-                f.write('Comparing with high quality label \n')
-            noiseless_metrics_written_unet(f,metrics)
+        
+
+        elif args.pre_labels == 'high_quality':
+            f.write('Training: Using %s labels \n' % args.pre_labels)
+            f.write('Comparing with high quality label \n')
+            noiseless_metrics_written_unet(f,metrics['vote'])
+
+
 
 
 
@@ -1620,7 +1656,7 @@ def get_metrics(output,masks_val,args,preds_val,criterion,mll,ece):
         loss = (1-soft_dice.mean())
     elif args.loss_type == 'BCE':
         loss = criterion(cls_probs_reshape, masks_val)
-    elif args.loss_type == 'dice_BCE' or args.loss_type == 'dice_BCE_voted':
+    elif args.loss_type == 'dice_BCE' or args.loss_type == 'dice_BCE_kl' or args.loss_type == 'dice_BCE_voted':
         soft_dice = compute_dice(cls_probs_reshape, masks_val.long())
         BCE = criterion(cls_probs_reshape, masks_val)
         loss = BCE + (1-soft_dice.mean())
@@ -1697,6 +1733,16 @@ def list_to_numpy(metrics,hyperpara, metrics_addnoise,index_non_empty,args):
     
     return metrics,hyperpara, metrics_addnoise
 
+def list_to_numpy_plot(metrics_addnoise):
+
+
+    metrics_addnoise['dice'] = np.array(metrics_addnoise['dice'], dtype='float32')
+    metrics_addnoise['nll'] = np.array(metrics_addnoise['nll'], dtype='float32')
+    metrics_addnoise['hd95'] = np.array(metrics_addnoise['hd95'], dtype='float32')
+    metrics_addnoise['ece_addnoise'] = np.array(metrics_addnoise['ece_addnoise'], dtype='float32')
+
+    
+    return metrics_addnoise
 
 def list_to_numpy_unet(metrics,index_non_empty):
 
@@ -1718,8 +1764,7 @@ def list_to_numpy_unet(metrics,index_non_empty):
 
     return metrics
 
-
-            
+         
 
 
 def get_metrics_all(model,args,likelihood,preds_val,masks_val,criterion,mll,metrics,hyperpara, metrics_addnoise,index_non_empty,selected_observation = None): 
@@ -1748,14 +1793,17 @@ def get_metrics_all(model,args,likelihood,preds_val,masks_val,criterion,mll,metr
         metrics_addnoise['hd'] += hd_distances_val_addnoise.tolist()
     
     elif args.addnoise == 'add3sigmas' or args.addnoise == 'add3sigmas3mus':
-        output_addnoise = likelihood(preds_val,args.addnoise,selected_observation)   # Get classification predictions
-        # output = likelihood(preds_val,'noadd')
+        output_addnoise = likelihood(preds_val,args.addnoise,selected_observation,args.num_annotators,len(selected_observation))   # Get classification predictions        
+        output = likelihood(preds_val,'noadd')
         loss_addnoise,nll_addnoise,metrics_addnoise['ece_addnoise'],hard_dice_addnoise,hard_iou_addnoise,hd_distances_val_addnoise, hd95_distances_val_addnoise = get_metrics(output_addnoise,masks_val,args,preds_val,criterion,mll,metrics_addnoise['ece_addnoise'])
-        # loss,nll,metrics['ece'],hard_dice,hard_iou,hd_distances_val, hd95_distances_val = get_metrics(output,masks_val,args,preds_val,criterion,mll,metrics['ece'])
+        loss,nll,metrics['ece'],hard_dice,hard_iou,hd_distances_val, hd95_distances_val = get_metrics(output,masks_val,args,preds_val,criterion,mll,metrics['ece'])
 
         hyperpara['noise'].append(likelihood.noise[selected_observation[0]].item())
         if args.addnoise == 'add3sigmas3mus':
-            hyperpara['mu'].append(likelihood.noise[3+selected_observation[0]].item())
+            hyperpara['mu'].append(likelihood.noise[args.num_annotators+selected_observation[0]].item())
+        if args.addnoise == 'add_1_bias_variance':
+            hyperpara['mu'].append(likelihood.noise[1+selected_observation[0]].item())
+
 
         metrics_addnoise['loss'].append(loss_addnoise.item())
         metrics_addnoise['dice'] += hard_dice_addnoise.tolist()
@@ -1764,12 +1812,12 @@ def get_metrics_all(model,args,likelihood,preds_val,masks_val,criterion,mll,metr
         metrics_addnoise['hd95'] += hd95_distances_val_addnoise.tolist()
         metrics_addnoise['hd'] += hd_distances_val_addnoise.tolist()
 
-        # metrics['loss'].append(loss.item())
-        # metrics['dice'] += hard_dice.tolist()
-        # metrics['iou'] += hard_iou.tolist()
-        # metrics['nll'] += nll.tolist()
-        # metrics['hd95'] += hd95_distances_val.tolist()
-        # metrics['hd'] += hd_distances_val.tolist()
+        metrics['loss'].append(loss.item())
+        metrics['dice'] += hard_dice.tolist()
+        metrics['iou'] += hard_iou.tolist()
+        metrics['nll'] += nll.tolist()
+        metrics['hd95'] += hd95_distances_val.tolist()
+        metrics['hd'] += hd_distances_val.tolist()
     elif args.addnoise == 'noadd':
         # noiseless
         output = likelihood(preds_val,'noadd')
@@ -1812,7 +1860,20 @@ def initialise_metrics():
 
     return metrics,hyperpara,metrics_addnoise,index_non_empty
     
+def initialise_metrics_plot():
+    loss_epoch,dice_epoch,iou_epoch,hd_epoch,hd95_epoch,ece,nll_epoch,index_non_empty = [],[],[],[],[],[],[],[]
+    loss_epoch_addnoise,dice_epoch_addnoise,iou_epoch_addnoise,hd_epoch_addnoise,hd95_epoch_addnoise,ece_addnoise,nll_epoch_addnoise = [],[],[],[],[],[],[]
+    noise_epoch,mu_epoch, lengthscale_epoch, outputscale_epoch,variance_epoch = [],[],[],[],[]
 
+    # hyperpara = {'outputscale': outputscale_epoch, 'noise': noise_epoch,'mu':mu_epoch, 'lengthscale': lengthscale_epoch, 'variance': variance_epoch}
+    # metrics = {'loss': loss_epoch, 'dice': dice_epoch, 'iou': iou_epoch, \
+    #            'nll': nll_epoch, 'ece': ece, 'hd': hd_epoch, 'hd95': hd95_epoch}
+    metrics_addnoise = {'ece_addnoise':ece_addnoise,'loss': loss_epoch_addnoise, \
+                        'dice': dice_epoch_addnoise, 'iou': iou_epoch_addnoise, 'nll': nll_epoch_addnoise, \
+                         'hd': hd_epoch_addnoise, 'hd95': hd95_epoch_addnoise}
+
+    return metrics_addnoise
+    
 
 def get_metrics_all_unet(preds_val,masks_val,criterion,args,metrics_val,index_non_empty_val):
 
@@ -1875,6 +1936,57 @@ def metrics_plot(sigma_all,mu_all,all_metrics,metrics_name,save_path):
     plt.savefig(save_path + '/'+metrics_name+'.eps')
     plt.close()
 
+def metrics_plot_each_image(sigma_all,mu_all,all_metrics,metrics_name,save_path,img_no):
+    
+    # matplotlib.rcParams['mathtext.fontset'] = 'cm'
+    # matplotlib.rc('font', family='serif', serif='CMU Serif')
+ 
+    X = sigma_all
+    Y = mu_all
+    X, Y = np.meshgrid(X, Y,indexing='ij')
+    Z = np.zeros((X.shape[0],X.shape[1]))
+    for i,sigma in enumerate(sigma_all):
+        for j,mu in enumerate(mu_all):
+            Z[i,j] = all_metrics[(sigma.item(),mu.item())][metrics_name].item()
+    
+    # plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    # plt.pcolormesh(X, Y, Z, cmap='viridis', shading='auto')  # Use z as color
+    im=plt.imshow(Z.T,origin='lower',norm=mcolors.LogNorm())
+    # im=plt.imshow(np.log(Z.T),origin='lower')
+    # plt.xlim(0,len(sigma_all)-1)
+    # plt.ylim(0,len(mu_all)-1)
+    # print(Z.T.shape)
+    fontsize=40
+    # plt.xticks(range(0,len(sigma_all),2),[f"{i:.2f}" for i in sigma_all.numpy()[::2]],fontsize=fontsize)
+    # plt.yticks(range(0,len(mu_all),2),[f"{i:.2f}" for i in mu_all.numpy()[::2]],fontsize=fontsize)
+    # plt.xticks([0,int((len(sigma_all)-1)/2),len(sigma_all)-1],[f"{i:.2f}" for i in sigma_all.numpy()[[0,int(len(sigma_all)/2),len(sigma_all)-1]]],fontsize=fontsize)
+    # plt.yticks([0,int((len(mu_all)-1)/2),len(mu_all)-1],[f"{i:.2f}" for i in mu_all.numpy()[[0,int(len(mu_all)/2),len(mu_all)-1]]],fontsize=fontsize)
+ 
+    # plt.xticks([0,len(sigma_all)-1],[f"{i:.1f}" for i in sigma_all.numpy()[[0,len(sigma_all)-1]]],fontsize=fontsize)
+    # plt.yticks([0,len(mu_all)-1],[f"{i:.1f}" for i in mu_all.numpy()[[0,len(mu_all)-1]]],fontsize=fontsize)
+    # plt.xticks([])
+    # plt.yticks([])
+
+    # plt.colorbar()
+    # cbar = plt.colorbar()
+    
+    cbar = plt.colorbar(im)
+
+    plt.setp(ax.get_xticklabels(), visible=False)
+    plt.setp(ax.get_yticklabels(), visible=False)
+    ax.tick_params(axis='both', which='both', length=0)
+
+    # for t in cbar.ax.get_yticklabels():
+    #     t.set_fontsize(19)
+    plt.xlabel('$\sigma$',fontsize=fontsize)
+    plt.ylabel('$\mu$',fontsize=fontsize)
+    # plt.title(metrics_name,fontsize=fontsize)
+    plt.savefig(save_path + '/'+metrics_name+'_image'+str(img_no)+'.png')
+    plt.savefig(save_path + '/'+metrics_name+'_image'+str(img_no)+'.pdf')
+    plt.savefig(save_path + '/'+metrics_name+'_image'+str(img_no)+'.eps')
+    plt.close()
+ 
 
 def metrics_plot_2(sigma_all,mu_all,all_metrics,metrics_name,save_path):
 
@@ -1902,6 +2014,66 @@ def metrics_plot_2(sigma_all,mu_all,all_metrics,metrics_name,save_path):
     plt.savefig(save_path + '/'+metrics_name+'.eps')
     plt.close()
 
+def get_metrics_all_each_image(args,likelihood,preds_val,masks_val,criterion,mll, metrics_addnoise,selected_observation = None):
+ 
+    output_addnoise = likelihood(preds_val,args.addnoise,selected_observation,args.num_annotators,len(selected_observation))   # Get classification predictions
+    loss_addnoise,nll_addnoise,metrics_addnoise['ece_addnoise'],hard_dice_addnoise,hard_iou_addnoise,hd_distances_val_addnoise, hd95_distances_val_addnoise = get_metrics(output_addnoise,masks_val,args,preds_val,criterion,mll,metrics_addnoise['ece_addnoise'])
+ 
+    metrics_addnoise['dice'] += hard_dice_addnoise.tolist()
+    metrics_addnoise['nll'] += nll_addnoise.tolist()
+    metrics_addnoise['hd95'] += hd95_distances_val_addnoise.tolist()
+ 
+             
+    return metrics_addnoise
+ 
+
+
+def plot_img_and_annotations(image_val,mask_wo_noise,mask_all,binary_output_0,binary_output_1,binary_output_2,saved_path,ii):
+    # colors = sns.color_palette("colorblind")
+    # colors = ["#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#FFFF33", "#A65628", "#F781BF", "#999999"]
+    colors = ['tab:blue','tab:orange','tab:green','tab:red','tab:purple','tab:brown','tab:pink','tab:olive','tab:cyan','tab:gray']
+    
+    fig, ax = plt.subplots(1, 1, figsize=(40, 10))
+
+    Linewidth = 1.5
+
+    ax.imshow(image_val[0],'gray')
+    plt.axis('off')
+
+
+    if len(torch.unique(mask_all[0,0]))==2:
+        contours = measure.find_contours(mask_all[0,0].cpu().detach().numpy(), level=0.5)[0]
+        ax.plot(contours[:, 1], contours[:, 0], linewidth=Linewidth, label='Annotation 1',color = colors[0])
+
+    if len(torch.unique(mask_all[0,1]))==2:
+        contours = measure.find_contours(mask_all[0,1].cpu().detach().numpy(), level=0.5)[0]
+        ax.plot(contours[:, 1], contours[:, 0], linewidth=Linewidth, label='Annotation 2',color = colors[2])
+
+    if len(torch.unique(mask_all[0,2]))==2:
+        contours = measure.find_contours(mask_all[0,2].cpu().detach().numpy(), level=0.5)[0]
+        ax.plot(contours[:, 1], contours[:, 0], linewidth=Linewidth, label='Annotation 3',color = colors[3])
+
+    
+    if len(torch.unique(binary_output_0))==2:
+        contours = measure.find_contours(binary_output_0.reshape(image_val.shape[1],image_val.shape[2]).cpu().detach().numpy(), level=0.5)[0]
+        ax.plot(contours[:, 1], contours[:, 0], linewidth=2,linestyle = '--', label='SVGP prediction for Annotation 1',color = colors[0])
+
+    if len(torch.unique(binary_output_1))==2:
+        contours = measure.find_contours(binary_output_1.reshape(image_val.shape[1],image_val.shape[2]).cpu().detach().numpy(), level=0.5)[0]
+        ax.plot(contours[:, 1], contours[:, 0], linewidth=2,linestyle = '--', label='SVGP prediction for Annotation 2',color = colors[2])
+
+    if len(torch.unique(binary_output_2))==2:
+        contours = measure.find_contours(binary_output_2.reshape(image_val.shape[1],image_val.shape[2]).cpu().detach().numpy(), level=0.5)[0]
+        ax.plot(contours[:, 1], contours[:, 0], linewidth=2,linestyle = '--', label='SVGP prediction for Annotation 3',color = colors[3])
+
+    ax.legend(ncol=6, loc='center', bbox_to_anchor=(0.5, 1.065),fontsize=33)
+    
+    plt.savefig(saved_path+'/'+'image_'+str(ii)+".png")
+    plt.savefig(saved_path+'/'+'image_'+str(ii)+".pdf")
+    plt.savefig(saved_path+'/'+'image_'+str(ii)+".eps")
+    plt.close()
+ 
+ 
 
 def ploting(output_addnoise,saved_path,images,masks,sigma,mu):
     prediction = output_addnoise.mean.ge(0.5).float()

@@ -16,26 +16,24 @@ from train_DKL import train_DKL
 from utils.BernoulliLikelihood_with_noise import BernoulliLikelihood_with_Noise
 
 parser = argparse.ArgumentParser(description="Experiment runfile, you run experiments from this file")
-parser.add_argument("--dataset", type=str,default="./data")
+parser.add_argument("--dataset", type=str,default="./data") 
+parser.add_argument("--num_annotators", type=int,default=3) 
 parser.add_argument("--num_epochs", type=int, default=500000)
 parser.add_argument('--num_class', type=int, default=1, help='The size of class')
 parser.add_argument("--batch_size_train", type=int, default=2)
 parser.add_argument("--batch_size_val", type=int, default=2)
 
-# parser.add_argument("--loss_type", type=str, default="dice_loss") # 'dice_loss' # likelihood # "few_shot"
-# 'random4': randomly select from three avaliable labels + one voted & corrected labels (which is called high quality label);
-# 'random3': randomly select from three avaliable labels; 
-# 'co: using only consistent label in GP train and GP loss calculation' # all: all three labels for GP train, the consistent label for cross entropy loss calculation
-parser.add_argument("--labels", type=str, default="random3") # 
-# 'voted_only': using only voted label for inference; 'high_quality': using corrected voted labels for inference
-parser.add_argument("--labels_infer", type=str, default="voted_only") 
+# 'random4': randomly select from three avaliable labels + one corrected label (which is called high quality label);
+parser.add_argument("--labels", type=str, default="random4") # 
+# "seg_1_2_3_HQ": use three avaliable labels and the high quality label for inference
+parser.add_argument("--labels_infer", type=str, default="seg_1_2_3_HQ") 
 parser.add_argument("--VariationalStrategy", type=str, default="InducingPts") # 'Grid' # 'InducingPts' 
 parser.add_argument("--num_indu", type=int, default=500) #number of inducing points
 parser.add_argument("--InducingPtsType", type=str, default="uniform") # 'fixed' # 'uniform'
 parser.add_argument("--grid_size", type=int, default=2) 
 parser.add_argument("--feat_dim", type=int, default=64)
 parser.add_argument("--FeatBatchNorm", type=str, default="noadd") # 'add' # 'noadd'
-parser.add_argument("--loss_type", type=str, default="dice_BCE") # dice; BCE; dice_BCE; dice_BCE_voted;dice_voted  # likelihood
+parser.add_argument("--loss_type", type=str, default="dice_BCE_kl") # dice_BCE_kl; dice; BCE; dice_BCE; dice_BCE_voted;dice_voted  # likelihood
 parser.add_argument("--loss_add_mu_reg", type=str, default="sum_2") # 'add' # 'noadd' # sum_2
 parser.add_argument("--load_pretrained_Unet", type=str, default="noload") # 'load' # 'noload'
 parser.add_argument("--trained_Unet", type=str, default="trainU") # 'trainU' # 'notrainU'
@@ -84,9 +82,9 @@ def main(args):
     # dataset.split_data()
     train_set,val_set,test_set = dataset.load_data_split(os.path.join(args.dataset,'data_split','train_list.json'),os.path.join(args.dataset,'data_split','val_list.json'),os.path.join(args.dataset,'data_split','test_list.json'))
 
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size_train, shuffle=True, num_workers=8)
-    val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size_val, shuffle=False, num_workers=8)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size_val, shuffle=False, num_workers=8)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size_train, shuffle=True, num_workers=0)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size_val, shuffle=False, num_workers=0)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size_val, shuffle=False, num_workers=0)
 
     # construct model
     feature_extractor = UNetFeatureExtractor(n_channels = 1, n_classes=args.num_class, feat_dim = args.feat_dim, FeatBN = args.FeatBatchNorm)
@@ -106,7 +104,7 @@ def main(args):
         model = DKLModelGrid(feature_extractor,input_dim = num_features,grid_size = args.grid_size)
     
     if args.addnoise == 'add' or args.addnoise == 'add3sigmas' or args.addnoise == 'add3sigmas3mus':
-        likelihood = BernoulliLikelihood_with_Noise(addnoise=args.addnoise)
+        likelihood = BernoulliLikelihood_with_Noise(addnoise=args.addnoise, num_annotators = args.num_annotators)
     
     elif args.addnoise == 'noadd':
         likelihood = gpytorch.likelihoods.BernoulliLikelihood()
