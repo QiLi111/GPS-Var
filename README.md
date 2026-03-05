@@ -36,16 +36,12 @@ The following shows the data structure requirement if you want to train the mode
 
 ```
 
-## Train a SVGP model
+## Train
 ``` bash
-python3 main.py
+python3 train.py
 ``` 
 
 ## Test
 ``` bash
-python3 main_test.py
-``` 
-## Query performance at various bias and variance
-``` bash
-python3 performance_estimation.py
+python3 test.py
 ``` 

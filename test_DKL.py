@@ -18,7 +18,7 @@ def test_DKL(test_set,test_loader,args,device,folder):
     # strategy for scalable GP
     if args.VariationalStrategy == 'InducingPts':
         inducing_points = generate_inducing_points(feature_extractor,num_features,test_set,args,device)
-        model = DKLModelInducingPts(feature_extractor, inducing_points=inducing_points,hyperparameter_fixed=args.hyperparameter, kernel_type = args.kernel_type)
+        model = DKLModelInducingPts(feature_extractor, inducing_points=inducing_points,kernel_type = args.kernel_type)
 
     # grid is not used in the project
     elif args.VariationalStrategy == 'Grid':
@@ -32,10 +32,7 @@ def test_DKL(test_set,test_loader,args,device,folder):
     else:
         raise ValueError("Invalid noise type")
     
-    if args.hyperparameter == 'fixed' and args.addnoise == 'add':
-        # likelihood.noise = 1e-2
-        likelihood.noise_covar.raw_noise.requires_grad = False
-        
+           
 
     model.to(device)
     likelihood.to(device)

@@ -8,7 +8,6 @@ from test_DKL import test_DKL
 import pickle
 
 models_folders = 'path/to/saved/models'
-high_quality_labels = True
 all_test_folders_path = os.path.join(os.getcwd(),models_folders)
 
 all_test_folders = [f for f in os.listdir(all_test_folders_path) if os.path.isdir(os.path.join(all_test_folders_path, f)) and not f.startswith('Unet')]
@@ -47,21 +46,14 @@ with open(os.getcwd()+'/'+ fd_name_save +'/'+csv_name, 'a', encoding='UTF8') as 
 
 for folder in all_test_folders:
     # get args
-    try:
-        args = get_args(os.path.join(all_test_folders_path,folder,'args.txt'),folder)
-        args.batch_size_val = 2
-        args.saved_name = models_folders+'/'+args.saved_name
-        args.pre_labels = args.labels
-        args.labels = 'inference'
+    args = get_args(os.path.join(all_test_folders_path,folder,'args.txt'),folder)
+    args.batch_size_val = 2
+    args.saved_name = models_folders+'/'+args.saved_name
+    args.pre_labels = args.labels
+    args.labels = 'inference'
            
-    except:
-        with open(os.getcwd()+'/'+ fd_name_save +'/'+csv_name_error, 'a', encoding='UTF8') as f_error:
-            f_error.write(f"Error in {folder}")
-            f_error.write('\n')
-        continue
-
     try:
-
+    
         print(f"Seeding with seed: {args.seed}")
         seed_all(int(args.seed))
         args.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -89,9 +81,7 @@ for folder in all_test_folders:
             f_error.write('\n')
         continue
     
-    # load saved metrics
-    # with open('saved_dictionary.pkl', 'rb') as f:
-    #     loaded_dict = pickle.load(f)
+
         
 
     

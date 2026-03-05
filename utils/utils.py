@@ -892,150 +892,6 @@ def get_args(path,folder):
             args[key] = value[:-1] 
 
 
-    if 'loss_add_mu_reg' not in args.keys():
-        if 'AddMuReg' in folder and 'NoAddMuReg' not in folder:
-            args['loss_add_mu_reg'] = 'add'
-        elif 'Sum2MuReg' in folder:
-            args['loss_add_mu_reg'] = 'sum_2'
-        elif 'NoAddMuReg' in folder:
-            args['loss_add_mu_reg'] = 'noadd'
-        else:
-            args['loss_add_mu_reg'] = 'noadd'
-            
-
-    if 'data_aug' not in args.keys():
-        if 'DA' in folder:
-            args['data_aug'] = 'add'
-        else:
-            args['data_aug'] = 'noadd'
-
-    if 'labels_infer' not in args.keys():
-        if 'high_quality' in folder:
-            args['labels_infer'] = 'high_quality'
-        elif 'voted_only' in folder:
-            args['labels_infer'] = 'voted_only'
-        else:
-            args['labels_infer'] = 'high_quality'
-
-    if 'labels' not in args.keys():
-        if 'random3' in folder:
-            args['labels'] = 'random3'
-        elif 'co' in folder and 'random3' not in folder:
-            args['labels'] = 'co'
-        else:
-            args['labels'] = 'co' 
-
-    if args['labels'] == 'co' and args['labels_infer'] == 'voted_only':
-        raise ValueError('Cannot use co labels for training and voted_only for inference.')
-
-
-    if 'InducingPtsType' not in args.keys():
-        if 'fixed' in folder:
-            args['InducingPtsType'] = 'fixed'
-        elif 'uniform' in folder:
-            args['InducingPtsType'] = 'uniform'
-        else:
-            args['InducingPtsType'] = 'fixed'
-    
-    if 'hyperparameter' not in args.keys():
-        if 'FixedHyper' in folder:
-            args['hyperparameter'] = 'fixed'
-        elif 'OptimizeHyper' in folder:
-            args['hyperparameter'] = 'optimize'
-        else:
-            args['hyperparameter'] = 'optimize'
-
-    if 'addnoise' not in args.keys():
-        if 'AddNoise' in folder and 'NoAddNoise' not in folder:
-            args['addnoise'] = 'add'
-        elif 'NoAddNoise' in folder:
-            args['addnoise'] = 'noadd'
-        elif 'Add3Sigmas' in folder and 'Add3Sigmas3Mus' not in folder:
-            args['addnoise'] = 'add3sigmas'
-        elif 'Add3Sigmas3Mus' in folder:
-            args['addnoise'] = 'add3sigmas3mus'
-        else:
-            args['addnoise'] = 'noadd'
-
-    if args['addnoise'] == 'add':
-        if 'addnoise_pred' not in args.keys():
-            if 'AddNoisePred' in folder and 'NoAddNoisePred' not in folder:
-                args['addnoise_pred'] = 'add'
-            elif 'NoAddNoisePred' in folder:
-                args['addnoise_pred'] = 'noadd'
-            else:
-                args['addnoise_pred'] = 'add'
-
-
-    if 'FeatBatchNorm' not in args.keys():
-        if 'FeatBN' in folder and 'NoFeatBN' not in folder:
-            args['FeatBatchNorm'] = 'add'
-        elif 'NoFeatBN' in folder:
-            args['FeatBatchNorm'] = 'noadd'
-        else:
-            args['FeatBatchNorm'] = 'noadd'
-    
-    if 'loss_type' not in args.keys():
-        if 'dice' in folder and 'BCE' not in folder and 'likelihood' not in folder and 'dice_BCE_voted' not in folder and 'dice_voted' not in folder:
-            args['loss_type'] = 'dice'
-        elif 'BCE' in folder and 'dice' not in folder and 'likelihood' not in folder and 'dice_BCE_voted' not in folder and 'dice_voted' not in folder:
-            args['loss_type'] = 'BCE'
-        elif 'BCE' in folder and 'dice' in folder and 'dice_BCE' in folder and 'likelihood' not in folder and 'dice_BCE_voted' not in folder and 'dice_voted' not in folder:
-            args['loss_type'] = 'dice_BCE'
-        elif 'dice_BCE_likelihood' in folder:
-            args['loss_type'] = 'dice_BCE_likelihood'
-        elif 'likelihood' in folder and 'dice_BCE_likelihood' not in folder:
-            args['loss_type'] = 'likelihood'
-        elif 'dice_BCE_voted' in folder:
-            args['loss_type'] = 'dice_BCE_voted'
-        elif 'dice_voted' in folder and 'dice_BCE_voted' not in folder:
-            args['loss_type'] = 'dice_voted'
-        
-        else:
-            args['loss_type'] = 'likelihood'
-
-    if 'kernel_type' not in args.keys():
-        if 'RBF' in folder and 'Linear' not in folder:
-            args['kernel_type'] = 'RBF'
-        elif 'Linear' in folder and 'RBF' in folder:
-            args['kernel_type'] = 'RBF_Linear'
-        elif 'RBF' not in folder and 'Linear' not in folder:
-            args['kernel_type'] = 'RBF'
-
-    if 'nll_type' not in args.keys():
-        if 'PredictiveLogLikelihood' in folder:
-            args['nll_type'] = 'PredictiveLogLikelihood'
-        elif 'VariationalELBO' in folder:
-            args['nll_type'] = 'VariationalELBO'
-        else:
-            args['nll_type'] = 'VariationalELBO'
-
-    split_folder = folder.split('_')
-    split_folder1 = folder.split('__')
-    # find split_folder which include 'InducingPts', and make the code in one line
-    if 'num_indu' not in args.keys():
-        inducing_pts = [s for s in split_folder1 if 'InducingPts' in s or 'uniform' in s or 'fixed' in s]
-        try:
-            num_inducing_pts = re.findall(r'\d+', inducing_pts[0])
-            if int(num_inducing_pts[0]) not in [500,1000,2000]:
-                raise ValueError('Number of inducing points is not in [500,1000,2000].')
-
-            args['num_indu'] = num_inducing_pts[0]
-        except:
-            args['num_indu'] = 500
-    
-    if 'feat_dim' not in args.keys():
-        feat_dim = [s for s in split_folder if 'FeatDim' in s]
-        try:
-            num_feat_dim = re.findall(r'\d+', feat_dim[0])
-            if int(num_feat_dim[0]) not in [8,16,32,64]:
-                raise ValueError('Feature dimension is not in [8,16,32,64].')
-            args['feat_dim'] = num_feat_dim[0]
-        except:
-            args['feat_dim'] = 64
-    
-
-
     args['batch_size_train'] = int(args['batch_size_train'])
     args['batch_size_val'] = int(args['batch_size_val'])
     args['FREQ_SAVE'] = 5
@@ -1044,9 +900,8 @@ def get_args(path,folder):
     args['feat_dim'] = int(args['feat_dim'])
     args['seed'] = int(args['seed'])
     args['num_class'] = int(args['num_class'])
-    args.num_annotators = int(args.num_annotators)
+    args['num_annotators'] = int(args['num_annotators'])
     
-
     args_convert = argparse.Namespace(**args)
  
     return args_convert
@@ -1132,15 +987,8 @@ def get_args_unet(path,folder):
 def Hyper_parameters_written(f,hyperpara,args,saved_model_name,saved_likelihood_name):
     f.write('Hyper-parameters &  ')
     f.write('$%.3f\pm%.3f$ &  ' % (hyperpara['outputscale'].mean(), np.std(hyperpara['outputscale'])))
-    if args.kernel_type == 'RBF':
-        f.write('$%.3f\pm%.3f$ &  ' % (hyperpara['lengthscale'].mean(), np.std(hyperpara['lengthscale'])))
-        f.write(' N/A &  ')
-    elif args.kernel_type == 'Linear':
-        f.write(' N/A &  ')
-        f.write('$%.3f\pm%.3f$ &  ' % (hyperpara['variance'].mean(), np.std(hyperpara['variance'])))
-    elif args.kernel_type == 'RBF_Linear':
-        f.write('$%.3f\pm%.3f$ &  ' % (hyperpara['lengthscale'].mean(), np.std(hyperpara['lengthscale'])))
-        f.write('$%.3f\pm%.3f$ &  ' % (hyperpara['variance'].mean(), np.std(hyperpara['variance'])))
+    f.write('$%.3f\pm%.3f$ &  ' % (hyperpara['lengthscale'].mean(), np.std(hyperpara['lengthscale'])))
+    f.write(' N/A &  ')
     
     f.write(str(saved_model_name))
     f.write(' &  ')
@@ -1835,15 +1683,8 @@ def get_metrics_all(model,args,likelihood,preds_val,masks_val,criterion,mll,metr
     index_non_empty += torch.tensor([torch.unique(flattened_masks[i]).numel() > 1 for i in range(masks_val.size(0))], dtype=torch.float32, device=masks_val.device).tolist()
 
     hyperpara['outputscale'].append(model.gp_layer.covar_module.outputscale.item())
-
-    if  args.kernel_type == 'RBF':
-        hyperpara['lengthscale'].append(model.gp_layer.covar_module.base_kernel.lengthscale.item())
-    elif args.kernel_type == 'Linear':
-        hyperpara['variance'].append(model.gp_layer.covar_module.base_kernel.variance.item())
-    elif args.kernel_type == 'RBF_Linear':
-        hyperpara['lengthscale'].append(model.gp_layer.covar_module.base_kernel.kernels[0].lengthscale.item())
-        hyperpara['variance'].append(model.gp_layer.covar_module.base_kernel.kernels[1].variance.item())
-            
+    hyperpara['lengthscale'].append(model.gp_layer.covar_module.base_kernel.lengthscale.item())
+     
     return metrics,hyperpara, metrics_addnoise,index_non_empty
 
 def initialise_metrics():
